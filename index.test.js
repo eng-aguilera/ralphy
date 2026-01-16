@@ -359,3 +359,250 @@ describe('Storage Service', () => {
     });
   });
 });
+
+describe('Renderer', () => {
+  let Renderer;
+  let SAMPLE_DATA;
+
+  beforeEach(() => {
+    document.documentElement.innerHTML = html.replace(/<!DOCTYPE html>/i, '');
+
+    const script = document.querySelector('script');
+    eval(script.textContent);
+
+    Renderer = window.Renderer;
+    SAMPLE_DATA = window.SAMPLE_DATA;
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  describe('getFaviconUrl', () => {
+    test('returns Google favicon URL for valid URL', () => {
+      const faviconUrl = Renderer.getFaviconUrl('https://github.com');
+      expect(faviconUrl).toBe('https://www.google.com/s2/favicons?domain=github.com&sz=32');
+    });
+
+    test('extracts hostname from URL with path', () => {
+      const faviconUrl = Renderer.getFaviconUrl('https://example.com/some/path');
+      expect(faviconUrl).toBe('https://www.google.com/s2/favicons?domain=example.com&sz=32');
+    });
+
+    test('handles URL with subdomain', () => {
+      const faviconUrl = Renderer.getFaviconUrl('https://news.ycombinator.com');
+      expect(faviconUrl).toBe('https://www.google.com/s2/favicons?domain=news.ycombinator.com&sz=32');
+    });
+
+    test('returns fallback for invalid URL', () => {
+      const faviconUrl = Renderer.getFaviconUrl('not-a-valid-url');
+      expect(faviconUrl).toBe('https://www.google.com/s2/favicons?domain=example.com&sz=32');
+    });
+  });
+
+  describe('createBookmarkElement', () => {
+    const testBookmark = {
+      id: 'test-bookmark-1',
+      title: 'Test Site',
+      url: 'https://test.com',
+      order: 0
+    };
+
+    test('returns an anchor element', () => {
+      const element = Renderer.createBookmarkElement(testBookmark);
+      expect(element.tagName.toLowerCase()).toBe('a');
+    });
+
+    test('has correct href', () => {
+      const element = Renderer.createBookmarkElement(testBookmark);
+      expect(element.href).toBe('https://test.com/');
+    });
+
+    test('has bookmark-item class', () => {
+      const element = Renderer.createBookmarkElement(testBookmark);
+      expect(element.classList.contains('bookmark-item')).toBe(true);
+    });
+
+    test('opens in new tab', () => {
+      const element = Renderer.createBookmarkElement(testBookmark);
+      expect(element.target).toBe('_blank');
+      expect(element.rel).toBe('noopener noreferrer');
+    });
+
+    test('has data-id attribute', () => {
+      const element = Renderer.createBookmarkElement(testBookmark);
+      expect(element.dataset.id).toBe('test-bookmark-1');
+    });
+
+    test('contains favicon image', () => {
+      const element = Renderer.createBookmarkElement(testBookmark);
+      const favicon = element.querySelector('.bookmark-favicon');
+      expect(favicon).not.toBeNull();
+      expect(favicon.tagName.toLowerCase()).toBe('img');
+      expect(favicon.src).toContain('google.com/s2/favicons');
+    });
+
+    test('favicon has lazy loading', () => {
+      const element = Renderer.createBookmarkElement(testBookmark);
+      const favicon = element.querySelector('.bookmark-favicon');
+      expect(favicon.loading).toBe('lazy');
+    });
+
+    test('contains title', () => {
+      const element = Renderer.createBookmarkElement(testBookmark);
+      const title = element.querySelector('.bookmark-title');
+      expect(title).not.toBeNull();
+      expect(title.textContent).toBe('Test Site');
+    });
+
+    test('contains edit and delete buttons', () => {
+      const element = Renderer.createBookmarkElement(testBookmark);
+      const actions = element.querySelector('.bookmark-actions');
+      expect(actions).not.toBeNull();
+
+      const editBtn = actions.querySelector('[data-action="edit"]');
+      expect(editBtn).not.toBeNull();
+      expect(editBtn.dataset.id).toBe('test-bookmark-1');
+
+      const deleteBtn = actions.querySelector('[data-action="delete"]');
+      expect(deleteBtn).not.toBeNull();
+      expect(deleteBtn.dataset.id).toBe('test-bookmark-1');
+    });
+  });
+
+  describe('createGroupElement', () => {
+    const testGroup = {
+      id: 'test-group-1',
+      name: 'Test Group',
+      order: 0,
+      bookmarks: [
+        { id: 'bm-1', title: 'Site A', url: 'https://a.com', order: 1 },
+        { id: 'bm-2', title: 'Site B', url: 'https://b.com', order: 0 }
+      ]
+    };
+
+    test('returns a div element', () => {
+      const element = Renderer.createGroupElement(testGroup);
+      expect(element.tagName.toLowerCase()).toBe('div');
+    });
+
+    test('has group-card class', () => {
+      const element = Renderer.createGroupElement(testGroup);
+      expect(element.classList.contains('group-card')).toBe(true);
+    });
+
+    test('has data-id attribute', () => {
+      const element = Renderer.createGroupElement(testGroup);
+      expect(element.dataset.id).toBe('test-group-1');
+    });
+
+    test('contains group header with title', () => {
+      const element = Renderer.createGroupElement(testGroup);
+      const header = element.querySelector('.group-header');
+      expect(header).not.toBeNull();
+
+      const title = header.querySelector('.group-title');
+      expect(title).not.toBeNull();
+      expect(title.textContent).toBe('Test Group');
+    });
+
+    test('contains edit and delete group buttons', () => {
+      const element = Renderer.createGroupElement(testGroup);
+      const actions = element.querySelector('.group-actions');
+      expect(actions).not.toBeNull();
+
+      const editBtn = actions.querySelector('[data-action="edit-group"]');
+      expect(editBtn).not.toBeNull();
+      expect(editBtn.dataset.id).toBe('test-group-1');
+
+      const deleteBtn = actions.querySelector('[data-action="delete-group"]');
+      expect(deleteBtn).not.toBeNull();
+      expect(deleteBtn.dataset.id).toBe('test-group-1');
+    });
+
+    test('contains bookmarks list', () => {
+      const element = Renderer.createGroupElement(testGroup);
+      const bookmarksList = element.querySelector('.bookmarks-list');
+      expect(bookmarksList).not.toBeNull();
+    });
+
+    test('renders bookmarks sorted by order', () => {
+      const element = Renderer.createGroupElement(testGroup);
+      const bookmarks = element.querySelectorAll('.bookmark-item');
+      expect(bookmarks.length).toBe(2);
+      // Site B has order 0, Site A has order 1
+      expect(bookmarks[0].querySelector('.bookmark-title').textContent).toBe('Site B');
+      expect(bookmarks[1].querySelector('.bookmark-title').textContent).toBe('Site A');
+    });
+
+    test('shows empty state for group with no bookmarks', () => {
+      const emptyGroup = { id: 'empty', name: 'Empty', order: 0, bookmarks: [] };
+      const element = Renderer.createGroupElement(emptyGroup);
+      const emptyState = element.querySelector('.empty-state');
+      expect(emptyState).not.toBeNull();
+      expect(emptyState.textContent).toBe('No bookmarks yet');
+    });
+  });
+
+  describe('render', () => {
+    test('renders groups to container', () => {
+      Renderer.render(SAMPLE_DATA);
+      const container = document.getElementById('groups-container');
+      const groups = container.querySelectorAll('.group-card');
+      expect(groups.length).toBe(SAMPLE_DATA.groups.length);
+    });
+
+    test('renders groups sorted by order', () => {
+      Renderer.render(SAMPLE_DATA);
+      const container = document.getElementById('groups-container');
+      const titles = container.querySelectorAll('.group-title');
+      // SAMPLE_DATA has Development (0), Social (1), News (2)
+      expect(titles[0].textContent).toBe('Development');
+      expect(titles[1].textContent).toBe('Social');
+      expect(titles[2].textContent).toBe('News');
+    });
+
+    test('renders bookmarks within groups', () => {
+      Renderer.render(SAMPLE_DATA);
+      const container = document.getElementById('groups-container');
+      const bookmarks = container.querySelectorAll('.bookmark-item');
+      const totalBookmarks = SAMPLE_DATA.groups.reduce((sum, g) => sum + g.bookmarks.length, 0);
+      expect(bookmarks.length).toBe(totalBookmarks);
+    });
+
+    test('shows empty state when no groups', () => {
+      Renderer.render({ groups: [] });
+      const container = document.getElementById('groups-container');
+      const emptyState = container.querySelector('.empty-state');
+      expect(emptyState).not.toBeNull();
+      expect(emptyState.textContent).toContain('No bookmark groups yet');
+    });
+
+    test('shows empty state for null data', () => {
+      Renderer.render(null);
+      const container = document.getElementById('groups-container');
+      const emptyState = container.querySelector('.empty-state');
+      expect(emptyState).not.toBeNull();
+    });
+
+    test('clears container before rendering', () => {
+      const container = document.getElementById('groups-container');
+      container.innerHTML = '<div class="old-content">Old</div>';
+
+      Renderer.render(SAMPLE_DATA);
+
+      expect(container.querySelector('.old-content')).toBeNull();
+      expect(container.querySelectorAll('.group-card').length).toBe(SAMPLE_DATA.groups.length);
+    });
+
+    test('renders favicons with Google favicon service URL', () => {
+      Renderer.render(SAMPLE_DATA);
+      const container = document.getElementById('groups-container');
+      const favicons = container.querySelectorAll('.bookmark-favicon');
+      favicons.forEach(favicon => {
+        expect(favicon.src).toContain('https://www.google.com/s2/favicons');
+      });
+    });
+  });
+});

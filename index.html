@@ -458,19 +458,157 @@
       }
     };
 
+    // Renderer for displaying groups and bookmarks
+    const Renderer = {
+      // Get favicon URL using Google's favicon service
+      getFaviconUrl(url) {
+        try {
+          const urlObj = new URL(url);
+          return `https://www.google.com/s2/favicons?domain=${urlObj.hostname}&sz=32`;
+        } catch (e) {
+          return `https://www.google.com/s2/favicons?domain=example.com&sz=32`;
+        }
+      },
+
+      // Create a bookmark element
+      createBookmarkElement(bookmark) {
+        const link = document.createElement('a');
+        link.href = bookmark.url;
+        link.className = 'bookmark-item';
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.dataset.id = bookmark.id;
+
+        const favicon = document.createElement('img');
+        favicon.src = this.getFaviconUrl(bookmark.url);
+        favicon.alt = '';
+        favicon.className = 'bookmark-favicon';
+        favicon.loading = 'lazy';
+
+        const title = document.createElement('span');
+        title.className = 'bookmark-title';
+        title.textContent = bookmark.title;
+
+        const actions = document.createElement('div');
+        actions.className = 'bookmark-actions';
+
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.textContent = 'Edit';
+        editBtn.dataset.action = 'edit';
+        editBtn.dataset.id = bookmark.id;
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.dataset.action = 'delete';
+        deleteBtn.dataset.id = bookmark.id;
+
+        actions.appendChild(editBtn);
+        actions.appendChild(deleteBtn);
+
+        link.appendChild(favicon);
+        link.appendChild(title);
+        link.appendChild(actions);
+
+        return link;
+      },
+
+      // Create a group card element
+      createGroupElement(group) {
+        const card = document.createElement('div');
+        card.className = 'group-card';
+        card.dataset.id = group.id;
+
+        const header = document.createElement('div');
+        header.className = 'group-header';
+
+        const title = document.createElement('h2');
+        title.className = 'group-title';
+        title.textContent = group.name;
+
+        const actions = document.createElement('div');
+        actions.className = 'group-actions';
+
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.textContent = 'Edit';
+        editBtn.dataset.action = 'edit-group';
+        editBtn.dataset.id = group.id;
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.dataset.action = 'delete-group';
+        deleteBtn.dataset.id = group.id;
+
+        actions.appendChild(editBtn);
+        actions.appendChild(deleteBtn);
+
+        header.appendChild(title);
+        header.appendChild(actions);
+
+        const bookmarksList = document.createElement('div');
+        bookmarksList.className = 'bookmarks-list';
+
+        // Sort bookmarks by order and render
+        const sortedBookmarks = [...group.bookmarks].sort((a, b) => a.order - b.order);
+        sortedBookmarks.forEach(bookmark => {
+          bookmarksList.appendChild(this.createBookmarkElement(bookmark));
+        });
+
+        // Show empty state if no bookmarks
+        if (group.bookmarks.length === 0) {
+          const empty = document.createElement('p');
+          empty.className = 'empty-state';
+          empty.textContent = 'No bookmarks yet';
+          bookmarksList.appendChild(empty);
+        }
+
+        card.appendChild(header);
+        card.appendChild(bookmarksList);
+
+        return card;
+      },
+
+      // Render all groups to the container
+      render(data) {
+        const container = document.getElementById('groups-container');
+        if (!container) return;
+
+        container.innerHTML = '';
+
+        if (!data || !data.groups || data.groups.length === 0) {
+          const empty = document.createElement('div');
+          empty.className = 'empty-state';
+          empty.textContent = 'No bookmark groups yet. Click "+ Group" to create one.';
+          container.appendChild(empty);
+          return;
+        }
+
+        // Sort groups by order and render
+        const sortedGroups = [...data.groups].sort((a, b) => a.order - b.order);
+        sortedGroups.forEach(group => {
+          container.appendChild(this.createGroupElement(group));
+        });
+      }
+    };
+
     // App object
     const App = {
       data: null,
 
       init() {
         this.data = Storage.loadData();
+        Renderer.render(this.data);
         console.log('Bookmark app initialized with', this.data.groups.length, 'groups');
       }
     };
 
-    // Expose Storage for testing
+    // Expose objects for testing
     if (typeof window !== 'undefined') {
       window.Storage = Storage;
+      window.Renderer = Renderer;
       window.STORAGE_KEY = STORAGE_KEY;
       window.SAMPLE_DATA = SAMPLE_DATA;
     }
