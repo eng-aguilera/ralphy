@@ -3,6 +3,7 @@
  */
 
 import { readFileSync } from 'fs';
+import { jest } from '@jest/globals';
 
 const html = readFileSync('./index.html', 'utf-8');
 
@@ -2922,6 +2923,716 @@ describe('Search', () => {
       const emptyState = container.querySelector('.empty-state');
       expect(emptyState).not.toBeNull();
       expect(emptyState.textContent).toContain('No bookmark groups');
+    });
+  });
+});
+
+describe('Import/Export functionality', () => {
+  beforeEach(() => {
+    document.documentElement.innerHTML = html.replace(/<!DOCTYPE html>/i, '');
+    localStorage.clear();
+
+    // Run initialization script
+    const script = document.querySelector('script');
+    if (script) {
+      eval(script.textContent);
+    }
+
+    App.init();
+  });
+
+  describe('HTML elements', () => {
+    test('has export button', () => {
+      const btn = document.getElementById('export-btn');
+      expect(btn).not.toBeNull();
+      expect(btn.textContent).toBe('Export');
+    });
+
+    test('has import button', () => {
+      const btn = document.getElementById('import-btn');
+      expect(btn).not.toBeNull();
+      expect(btn.textContent).toBe('Import');
+    });
+
+    test('has hidden file input for import', () => {
+      const input = document.getElementById('import-file');
+      expect(input).not.toBeNull();
+      expect(input.type).toBe('file');
+      expect(input.accept).toBe('.json');
+      expect(input.style.display).toBe('none');
+    });
+  });
+
+  describe('ImportExport init', () => {
+    test('references exportBtn element', () => {
+      expect(ImportExport.exportBtn).not.toBeNull();
+      expect(ImportExport.exportBtn.id).toBe('export-btn');
+    });
+
+    test('references importBtn element', () => {
+      expect(ImportExport.importBtn).not.toBeNull();
+      expect(ImportExport.importBtn.id).toBe('import-btn');
+    });
+
+    test('references importFile element', () => {
+      expect(ImportExport.importFile).not.toBeNull();
+      expect(ImportExport.importFile.id).toBe('import-file');
+    });
+
+    test('exposes ImportExport to window', () => {
+      expect(window.ImportExport).toBeDefined();
+    });
+  });
+
+  describe('getTimestamp', () => {
+    test('returns date in YYYY-MM-DD format', () => {
+      const timestamp = ImportExport.getTimestamp();
+      expect(timestamp).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    test('returns current date', () => {
+      const timestamp = ImportExport.getTimestamp();
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      expect(timestamp).toBe(`${year}-${month}-${day}`);
+    });
+  });
+
+  describe('validateData', () => {
+    test('returns true for valid data structure', () => {
+      const validData = {
+        groups: [
+          {
+            id: 'group-1',
+            name: 'Test Group',
+            bookmarks: [
+              { id: 'bm-1', title: 'Test', url: 'https://test.com' }
+            ]
+          }
+        ]
+      };
+      expect(ImportExport.validateData(validData)).toBe(true);
+    });
+
+    test('returns true for empty groups array', () => {
+      const emptyData = { groups: [] };
+      expect(ImportExport.validateData(emptyData)).toBe(true);
+    });
+
+    test('returns true for group with empty bookmarks', () => {
+      const data = {
+        groups: [
+          { id: 'group-1', name: 'Empty Group', bookmarks: [] }
+        ]
+      };
+      expect(ImportExport.validateData(data)).toBe(true);
+    });
+
+    test('returns false for null', () => {
+      expect(ImportExport.validateData(null)).toBe(false);
+    });
+
+    test('returns false for non-object', () => {
+      expect(ImportExport.validateData('string')).toBe(false);
+      expect(ImportExport.validateData(123)).toBe(false);
+      expect(ImportExport.validateData([])).toBe(false);
+    });
+
+    test('returns false when groups is not an array', () => {
+      expect(ImportExport.validateData({ groups: 'not array' })).toBe(false);
+      expect(ImportExport.validateData({ groups: {} })).toBe(false);
+      expect(ImportExport.validateData({ groups: null })).toBe(false);
+    });
+
+    test('returns false when missing groups property', () => {
+      expect(ImportExport.validateData({})).toBe(false);
+      expect(ImportExport.validateData({ data: [] })).toBe(false);
+    });
+
+    test('returns false when group missing id', () => {
+      const data = {
+        groups: [
+          { name: 'No ID', bookmarks: [] }
+        ]
+      };
+      expect(ImportExport.validateData(data)).toBe(false);
+    });
+
+    test('returns false when group missing name', () => {
+      const data = {
+        groups: [
+          { id: 'group-1', bookmarks: [] }
+        ]
+      };
+      expect(ImportExport.validateData(data)).toBe(false);
+    });
+
+    test('returns false when group missing bookmarks', () => {
+      const data = {
+        groups: [
+          { id: 'group-1', name: 'Test' }
+        ]
+      };
+      expect(ImportExport.validateData(data)).toBe(false);
+    });
+
+    test('returns false when group has non-array bookmarks', () => {
+      const data = {
+        groups: [
+          { id: 'group-1', name: 'Test', bookmarks: 'not array' }
+        ]
+      };
+      expect(ImportExport.validateData(data)).toBe(false);
+    });
+
+    test('returns false when bookmark missing id', () => {
+      const data = {
+        groups: [
+          {
+            id: 'group-1',
+            name: 'Test',
+            bookmarks: [
+              { title: 'Test', url: 'https://test.com' }
+            ]
+          }
+        ]
+      };
+      expect(ImportExport.validateData(data)).toBe(false);
+    });
+
+    test('returns false when bookmark missing title', () => {
+      const data = {
+        groups: [
+          {
+            id: 'group-1',
+            name: 'Test',
+            bookmarks: [
+              { id: 'bm-1', url: 'https://test.com' }
+            ]
+          }
+        ]
+      };
+      expect(ImportExport.validateData(data)).toBe(false);
+    });
+
+    test('returns false when bookmark missing url', () => {
+      const data = {
+        groups: [
+          {
+            id: 'group-1',
+            name: 'Test',
+            bookmarks: [
+              { id: 'bm-1', title: 'Test' }
+            ]
+          }
+        ]
+      };
+      expect(ImportExport.validateData(data)).toBe(false);
+    });
+
+    test('returns false when bookmark has non-string id', () => {
+      const data = {
+        groups: [
+          {
+            id: 'group-1',
+            name: 'Test',
+            bookmarks: [
+              { id: 123, title: 'Test', url: 'https://test.com' }
+            ]
+          }
+        ]
+      };
+      expect(ImportExport.validateData(data)).toBe(false);
+    });
+  });
+
+  describe('exportData', () => {
+    let mockCreateElement;
+    let mockAppendChild;
+    let mockRemoveChild;
+    let mockClick;
+    let mockCreateObjectURL;
+    let mockRevokeObjectURL;
+    let createdLink;
+
+    beforeEach(() => {
+      createdLink = null;
+      mockClick = jest.fn();
+      mockCreateObjectURL = jest.fn().mockReturnValue('blob:test-url');
+      mockRevokeObjectURL = jest.fn();
+
+      // Store original functions
+      const originalCreateElement = document.createElement.bind(document);
+
+      // Mock document.createElement to capture the download link
+      mockCreateElement = jest.spyOn(document, 'createElement').mockImplementation((tag) => {
+        if (tag === 'a') {
+          createdLink = originalCreateElement('a');
+          createdLink.click = mockClick;
+          return createdLink;
+        }
+        return originalCreateElement(tag);
+      });
+
+      mockAppendChild = jest.spyOn(document.body, 'appendChild');
+      mockRemoveChild = jest.spyOn(document.body, 'removeChild');
+
+      // Mock URL methods
+      global.URL.createObjectURL = mockCreateObjectURL;
+      global.URL.revokeObjectURL = mockRevokeObjectURL;
+    });
+
+    afterEach(() => {
+      mockCreateElement.mockRestore();
+      mockAppendChild.mockRestore();
+      mockRemoveChild.mockRestore();
+    });
+
+    test('creates a download link', () => {
+      ImportExport.exportData();
+      expect(mockCreateElement).toHaveBeenCalledWith('a');
+    });
+
+    test('sets download filename with timestamp', () => {
+      ImportExport.exportData();
+      const timestamp = ImportExport.getTimestamp();
+      expect(createdLink.download).toBe(`bookmarks-${timestamp}.json`);
+    });
+
+    test('creates blob URL for download', () => {
+      ImportExport.exportData();
+      expect(mockCreateObjectURL).toHaveBeenCalled();
+      expect(createdLink.href).toContain('blob:');
+    });
+
+    test('triggers click on download link', () => {
+      ImportExport.exportData();
+      expect(mockClick).toHaveBeenCalled();
+    });
+
+    test('cleans up by removing link from DOM', () => {
+      ImportExport.exportData();
+      expect(mockRemoveChild).toHaveBeenCalled();
+    });
+
+    test('revokes blob URL after download', () => {
+      ImportExport.exportData();
+      expect(mockRevokeObjectURL).toHaveBeenCalledWith('blob:test-url');
+    });
+
+    test('shows alert when no data to export', () => {
+      const mockAlert = jest.spyOn(window, 'alert').mockImplementation(() => {});
+      App.data = null;
+
+      ImportExport.exportData();
+
+      expect(mockAlert).toHaveBeenCalledWith('No data to export.');
+      mockAlert.mockRestore();
+    });
+  });
+
+  describe('triggerImport', () => {
+    test('calls click on file input', () => {
+      const mockClick = jest.fn();
+      ImportExport.importFile.click = mockClick;
+
+      ImportExport.triggerImport();
+
+      expect(mockClick).toHaveBeenCalled();
+    });
+
+    test('resets file input value to empty string', () => {
+      // Note: File inputs can only be programmatically set to empty string
+      // Verify that the code assigns empty string (for allowing re-import of same file)
+      const mockClick = jest.fn();
+      ImportExport.importFile.click = mockClick;
+
+      ImportExport.triggerImport();
+
+      // After trigger, value should be empty string (reset)
+      expect(ImportExport.importFile.value).toBe('');
+    });
+  });
+
+  describe('handleImport', () => {
+    let mockAlert;
+    let mockConfirm;
+
+    beforeEach(() => {
+      mockAlert = jest.spyOn(window, 'alert').mockImplementation(() => {});
+      mockConfirm = jest.spyOn(window, 'confirm').mockImplementation(() => true);
+    });
+
+    afterEach(() => {
+      mockAlert.mockRestore();
+      mockConfirm.mockRestore();
+    });
+
+    test('rejects non-JSON files', () => {
+      const event = {
+        target: {
+          files: [{ name: 'test.txt' }]
+        }
+      };
+
+      ImportExport.handleImport(event);
+
+      expect(mockAlert).toHaveBeenCalledWith('Please select a JSON file.');
+    });
+
+    test('does nothing if no file selected', () => {
+      const event = {
+        target: {
+          files: []
+        }
+      };
+
+      ImportExport.handleImport(event);
+
+      expect(mockAlert).not.toHaveBeenCalled();
+    });
+
+    test('shows confirmation with group and bookmark count', (done) => {
+      const testData = {
+        groups: [
+          {
+            id: 'test-group',
+            name: 'Test',
+            bookmarks: [
+              { id: 'bm-1', title: 'One', url: 'https://one.com' },
+              { id: 'bm-2', title: 'Two', url: 'https://two.com' }
+            ]
+          },
+          {
+            id: 'test-group-2',
+            name: 'Test 2',
+            bookmarks: []
+          }
+        ]
+      };
+
+      const file = new Blob([JSON.stringify(testData)], { type: 'application/json' });
+      file.name = 'test.json';
+
+      const event = {
+        target: {
+          files: [file]
+        }
+      };
+
+      ImportExport.handleImport(event);
+
+      setTimeout(() => {
+        expect(mockConfirm).toHaveBeenCalledWith(
+          expect.stringContaining('2 groups')
+        );
+        expect(mockConfirm).toHaveBeenCalledWith(
+          expect.stringContaining('2 bookmarks')
+        );
+        done();
+      }, 100);
+    });
+
+    test('imports valid data and updates App.data', (done) => {
+      const testData = {
+        groups: [
+          {
+            id: 'imported-group',
+            name: 'Imported',
+            order: 0,
+            bookmarks: [
+              { id: 'imp-bm-1', title: 'Imported Bookmark', url: 'https://imported.com', order: 0 }
+            ]
+          }
+        ]
+      };
+
+      const file = new Blob([JSON.stringify(testData)], { type: 'application/json' });
+      file.name = 'import.json';
+
+      const event = {
+        target: {
+          files: [file]
+        }
+      };
+
+      ImportExport.handleImport(event);
+
+      setTimeout(() => {
+        expect(App.data.groups[0].id).toBe('imported-group');
+        expect(App.data.groups[0].name).toBe('Imported');
+        done();
+      }, 100);
+    });
+
+    test('saves imported data to localStorage', (done) => {
+      const testData = {
+        groups: [
+          {
+            id: 'storage-test',
+            name: 'Storage Test',
+            order: 0,
+            bookmarks: []
+          }
+        ]
+      };
+
+      const file = new Blob([JSON.stringify(testData)], { type: 'application/json' });
+      file.name = 'storage.json';
+
+      const event = {
+        target: {
+          files: [file]
+        }
+      };
+
+      ImportExport.handleImport(event);
+
+      setTimeout(() => {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        expect(saved.groups[0].id).toBe('storage-test');
+        done();
+      }, 100);
+    });
+
+    test('re-renders after import', (done) => {
+      const testData = {
+        groups: [
+          {
+            id: 'render-test',
+            name: 'Render Test Group',
+            order: 0,
+            bookmarks: []
+          }
+        ]
+      };
+
+      const file = new Blob([JSON.stringify(testData)], { type: 'application/json' });
+      file.name = 'render.json';
+
+      const event = {
+        target: {
+          files: [file]
+        }
+      };
+
+      ImportExport.handleImport(event);
+
+      setTimeout(() => {
+        const container = document.getElementById('groups-container');
+        const groupTitle = container.querySelector('.group-title');
+        expect(groupTitle.textContent).toBe('Render Test Group');
+        done();
+      }, 100);
+    });
+
+    test('does not import when user cancels', (done) => {
+      mockConfirm.mockImplementation(() => false);
+
+      const testData = {
+        groups: [
+          {
+            id: 'cancelled-import',
+            name: 'Should Not Import',
+            bookmarks: []
+          }
+        ]
+      };
+
+      const file = new Blob([JSON.stringify(testData)], { type: 'application/json' });
+      file.name = 'cancel.json';
+
+      const event = {
+        target: {
+          files: [file]
+        }
+      };
+
+      ImportExport.handleImport(event);
+
+      setTimeout(() => {
+        expect(App.data.groups[0].id).not.toBe('cancelled-import');
+        done();
+      }, 100);
+    });
+
+    test('shows error for invalid JSON', (done) => {
+      const file = new Blob(['not valid json'], { type: 'application/json' });
+      file.name = 'invalid.json';
+
+      const event = {
+        target: {
+          files: [file]
+        }
+      };
+
+      ImportExport.handleImport(event);
+
+      setTimeout(() => {
+        expect(mockAlert).toHaveBeenCalledWith('Error reading file: Invalid JSON format.');
+        done();
+      }, 100);
+    });
+
+    test('shows error for invalid data structure', (done) => {
+      const invalidData = { notGroups: [] };
+
+      const file = new Blob([JSON.stringify(invalidData)], { type: 'application/json' });
+      file.name = 'invalid-structure.json';
+
+      const event = {
+        target: {
+          files: [file]
+        }
+      };
+
+      ImportExport.handleImport(event);
+
+      setTimeout(() => {
+        expect(mockAlert).toHaveBeenCalledWith('Invalid bookmark data format. Please ensure the file contains valid bookmark data.');
+        done();
+      }, 100);
+    });
+
+    test('shows success message after import', (done) => {
+      const testData = {
+        groups: []
+      };
+
+      const file = new Blob([JSON.stringify(testData)], { type: 'application/json' });
+      file.name = 'success.json';
+
+      const event = {
+        target: {
+          files: [file]
+        }
+      };
+
+      ImportExport.handleImport(event);
+
+      setTimeout(() => {
+        expect(mockAlert).toHaveBeenCalledWith('Bookmarks imported successfully!');
+        done();
+      }, 100);
+    });
+  });
+
+  describe('event bindings', () => {
+    test('export button triggers exportData', () => {
+      const mockExportData = jest.spyOn(ImportExport, 'exportData').mockImplementation(() => {});
+
+      const exportBtn = document.getElementById('export-btn');
+      exportBtn.click();
+
+      expect(mockExportData).toHaveBeenCalled();
+      mockExportData.mockRestore();
+    });
+
+    test('import button triggers file input click', () => {
+      const mockTriggerImport = jest.spyOn(ImportExport, 'triggerImport').mockImplementation(() => {});
+
+      const importBtn = document.getElementById('import-btn');
+      importBtn.click();
+
+      expect(mockTriggerImport).toHaveBeenCalled();
+      mockTriggerImport.mockRestore();
+    });
+  });
+
+  describe('singular/plural in confirmation message', () => {
+    let mockConfirm;
+
+    beforeEach(() => {
+      mockConfirm = jest.spyOn(window, 'confirm').mockImplementation(() => true);
+      jest.spyOn(window, 'alert').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    test('uses singular "group" for 1 group', (done) => {
+      const testData = {
+        groups: [
+          { id: 'g1', name: 'One', bookmarks: [] }
+        ]
+      };
+
+      const file = new Blob([JSON.stringify(testData)], { type: 'application/json' });
+      file.name = 'test.json';
+
+      ImportExport.handleImport({ target: { files: [file] } });
+
+      setTimeout(() => {
+        expect(mockConfirm).toHaveBeenCalledWith(expect.stringContaining('1 group'));
+        expect(mockConfirm).toHaveBeenCalledWith(expect.not.stringContaining('1 groups'));
+        done();
+      }, 100);
+    });
+
+    test('uses plural "groups" for multiple groups', (done) => {
+      const testData = {
+        groups: [
+          { id: 'g1', name: 'One', bookmarks: [] },
+          { id: 'g2', name: 'Two', bookmarks: [] }
+        ]
+      };
+
+      const file = new Blob([JSON.stringify(testData)], { type: 'application/json' });
+      file.name = 'test.json';
+
+      ImportExport.handleImport({ target: { files: [file] } });
+
+      setTimeout(() => {
+        expect(mockConfirm).toHaveBeenCalledWith(expect.stringContaining('2 groups'));
+        done();
+      }, 100);
+    });
+
+    test('uses singular "bookmark" for 1 bookmark', (done) => {
+      const testData = {
+        groups: [
+          { id: 'g1', name: 'One', bookmarks: [{ id: 'b1', title: 'B', url: 'https://b.com' }] }
+        ]
+      };
+
+      const file = new Blob([JSON.stringify(testData)], { type: 'application/json' });
+      file.name = 'test.json';
+
+      ImportExport.handleImport({ target: { files: [file] } });
+
+      setTimeout(() => {
+        expect(mockConfirm).toHaveBeenCalledWith(expect.stringContaining('1 bookmark'));
+        expect(mockConfirm).toHaveBeenCalledWith(expect.not.stringContaining('1 bookmarks'));
+        done();
+      }, 100);
+    });
+
+    test('uses plural "bookmarks" for multiple bookmarks', (done) => {
+      const testData = {
+        groups: [
+          {
+            id: 'g1',
+            name: 'One',
+            bookmarks: [
+              { id: 'b1', title: 'B1', url: 'https://b1.com' },
+              { id: 'b2', title: 'B2', url: 'https://b2.com' }
+            ]
+          }
+        ]
+      };
+
+      const file = new Blob([JSON.stringify(testData)], { type: 'application/json' });
+      file.name = 'test.json';
+
+      ImportExport.handleImport({ target: { files: [file] } });
+
+      setTimeout(() => {
+        expect(mockConfirm).toHaveBeenCalledWith(expect.stringContaining('2 bookmarks'));
+        done();
+      }, 100);
     });
   });
 });

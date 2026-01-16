@@ -376,6 +376,9 @@
         <div class="search-container">
           <input type="text" id="search-input" placeholder="Search bookmarks... (/)" aria-label="Search bookmarks">
         </div>
+        <button class="btn" id="export-btn">Export</button>
+        <button class="btn" id="import-btn">Import</button>
+        <input type="file" id="import-file" accept=".json" style="display: none;">
         <button class="btn" id="add-group-btn">+ Group</button>
         <button class="btn btn-primary" id="add-bookmark-btn">+ Bookmark</button>
       </div>
@@ -1391,6 +1394,156 @@
       }
     };
 
+    // Import/Export controller for JSON file operations
+    const ImportExport = {
+      exportBtn: null,
+      importBtn: null,
+      importFile: null,
+
+      init() {
+        this.exportBtn = document.getElementById('export-btn');
+        this.importBtn = document.getElementById('import-btn');
+        this.importFile = document.getElementById('import-file');
+
+        this.bindEvents();
+      },
+
+      bindEvents() {
+        if (this.exportBtn) {
+          this.exportBtn.addEventListener('click', () => this.exportData());
+        }
+
+        if (this.importBtn) {
+          this.importBtn.addEventListener('click', () => this.triggerImport());
+        }
+
+        if (this.importFile) {
+          this.importFile.addEventListener('change', (e) => this.handleImport(e));
+        }
+      },
+
+      // Export data as JSON file download
+      exportData() {
+        const data = App.data;
+        if (!data) {
+          alert('No data to export.');
+          return;
+        }
+
+        const json = JSON.stringify(data, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `bookmarks-${this.getTimestamp()}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        URL.revokeObjectURL(url);
+      },
+
+      // Generate timestamp for filename
+      getTimestamp() {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      },
+
+      // Trigger file input click
+      triggerImport() {
+        if (this.importFile) {
+          this.importFile.value = ''; // Reset to allow re-importing same file
+          this.importFile.click();
+        }
+      },
+
+      // Handle file import
+      handleImport(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Validate file type
+        if (!file.name.endsWith('.json')) {
+          alert('Please select a JSON file.');
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const data = JSON.parse(event.target.result);
+
+            // Validate data structure
+            if (!this.validateData(data)) {
+              alert('Invalid bookmark data format. Please ensure the file contains valid bookmark data.');
+              return;
+            }
+
+            // Confirm import (will replace existing data)
+            const groupCount = data.groups ? data.groups.length : 0;
+            const bookmarkCount = data.groups
+              ? data.groups.reduce((sum, g) => sum + (g.bookmarks ? g.bookmarks.length : 0), 0)
+              : 0;
+
+            const confirmed = confirm(
+              `Import ${groupCount} group${groupCount !== 1 ? 's' : ''} with ${bookmarkCount} bookmark${bookmarkCount !== 1 ? 's' : ''}?\n\nThis will replace your current bookmarks.`
+            );
+
+            if (!confirmed) return;
+
+            // Import data
+            App.data = data;
+            Storage.saveData(data);
+            Renderer.render(data);
+
+            alert('Bookmarks imported successfully!');
+          } catch (err) {
+            alert('Error reading file: Invalid JSON format.');
+          }
+        };
+
+        reader.onerror = () => {
+          alert('Error reading file.');
+        };
+
+        reader.readAsText(file);
+      },
+
+      // Validate imported data structure
+      validateData(data) {
+        // Must be an object
+        if (typeof data !== 'object' || data === null) return false;
+
+        // Must have groups array
+        if (!Array.isArray(data.groups)) return false;
+
+        // Validate each group
+        for (const group of data.groups) {
+          // Group must have id and name
+          if (typeof group.id !== 'string' || typeof group.name !== 'string') return false;
+
+          // Group must have bookmarks array
+          if (!Array.isArray(group.bookmarks)) return false;
+
+          // Validate each bookmark
+          for (const bookmark of group.bookmarks) {
+            // Bookmark must have id, title, and url
+            if (typeof bookmark.id !== 'string' ||
+                typeof bookmark.title !== 'string' ||
+                typeof bookmark.url !== 'string') {
+              return false;
+            }
+          }
+        }
+
+        return true;
+      }
+    };
+
     // App object
     const App = {
       data: null,
@@ -1403,6 +1556,7 @@
         DragDrop.init();
         GroupDragDrop.init();
         Search.init();
+        ImportExport.init();
         this.bindEvents();
         console.log('Bookmark app initialized with', this.data.groups.length, 'groups');
       },
@@ -1514,6 +1668,7 @@
       window.DragDrop = DragDrop;
       window.GroupDragDrop = GroupDragDrop;
       window.Search = Search;
+      window.ImportExport = ImportExport;
       window.App = App;
       window.STORAGE_KEY = STORAGE_KEY;
       window.SAMPLE_DATA = SAMPLE_DATA;

@@ -509,3 +509,112 @@ Integration: search and render (3 tests):
 Additional integration tests (3 tests):
 - filters show multiple matching bookmarks
 - preserves group order when filtering
+
+## Task 11: Add import/export buttons for JSON file download/upload
+
+Completed: 2026-01-16
+
+### Changes:
+- Added Import/Export buttons to header in index.html:
+  - Export button with id `export-btn`
+  - Import button with id `import-btn`
+  - Hidden file input with id `import-file` accepting `.json` files
+
+- Added ImportExport controller to index.html with:
+  - `init()`: Initializes button and file input references, binds event handlers
+  - `bindEvents()`: Sets up click handlers for export/import buttons and change handler for file input
+  - `exportData()`: Exports current bookmark data as JSON file download
+    - Creates Blob with formatted JSON (2-space indent)
+    - Uses URL.createObjectURL for download link
+    - Auto-generates filename: `bookmarks-YYYY-MM-DD.json`
+    - Cleans up object URL after download
+  - `getTimestamp()`: Generates date string for filename (YYYY-MM-DD format)
+  - `triggerImport()`: Opens file dialog when import button clicked
+    - Resets file input value to allow re-importing same file
+  - `handleImport(e)`: Processes selected JSON file
+    - Validates file extension (.json)
+    - Parses JSON content
+    - Validates data structure using validateData()
+    - Shows confirmation with group/bookmark counts (singular/plural)
+    - Replaces current data and re-renders on confirmation
+    - Shows success/error alerts for user feedback
+  - `validateData(data)`: Validates imported JSON structure
+    - Checks for object with groups array
+    - Validates each group has id, name, and bookmarks array
+    - Validates each bookmark has id, title, and url
+
+- Updated App.init() to initialize ImportExport
+- Exposed ImportExport to window for testing
+
+### Test Results:
+- 321 tests passed (272 existing + 49 new)
+- Linting passed with no errors or warnings
+
+### New Tests Added:
+HTML elements (3 tests):
+- export button exists with correct id
+- import button exists with correct id
+- hidden file input exists with correct attributes
+
+ImportExport init (3 tests):
+- references export button
+- references import button
+- references file input
+
+getTimestamp (1 test):
+- returns date in YYYY-MM-DD format
+
+validateData (18 tests):
+- returns true for valid data structure
+- returns true for data with multiple groups
+- returns true for groups with bookmarks
+- returns false for null
+- returns false for non-object
+- returns false for missing groups property
+- returns false for non-array groups
+- returns false for group missing id
+- returns false for group missing name
+- returns false for group missing bookmarks
+- returns false for non-array bookmarks
+- returns false for bookmark missing id
+- returns false for bookmark missing title
+- returns false for bookmark missing url
+- returns true for empty groups array
+- returns true for group with empty bookmarks
+- returns false for non-string group id
+- returns false for non-string bookmark url
+
+exportData (7 tests):
+- creates blob with JSON data
+- triggers download link click
+- sets correct filename format
+- removes download link after click
+- revokes object URL after download
+- shows alert when no data
+- exports correct data structure
+
+triggerImport (2 tests):
+- clicks hidden file input
+- resets file input value to empty string
+
+handleImport (10 tests):
+- ignores when no file selected
+- shows error for non-JSON files
+- parses and validates JSON file
+- shows error for invalid data structure
+- shows confirmation dialog with counts
+- saves imported data to localStorage
+- re-renders after import
+- does not import when user cancels
+- shows error for invalid JSON
+- shows success message after import
+
+event bindings (2 tests):
+- export button triggers exportData
+- import button triggers file input click
+
+singular/plural in confirmation message (4 tests):
+- uses singular "group" for 1 group
+- uses plural "groups" for multiple groups
+- uses singular "bookmark" for 1 bookmark
+- uses plural "bookmarks" for multiple bookmarks
