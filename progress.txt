@@ -707,3 +707,63 @@ Responsive styles (4 tests):
 - has tablet breakpoint at 768px
 - search hint is hidden on mobile in CSS
 - group actions visible on mobile (opacity 1)
+
+## Task 13: Implement edit group feature
+
+Completed: 2026-01-16
+
+### Changes:
+- Added `openForEdit(groupId)` method to GroupModal:
+  - Finds group by ID in App.data.groups
+  - Pre-fills form with existing group name
+  - Sets modal title to "Edit Group"
+  - Sets hidden id field to group id
+  - Shows alert if group not found
+
+- Modified `handleSubmit()` to support both create and edit modes:
+  - Detects edit mode by checking if idInput has a value
+  - For edit: finds group by ID and updates the name
+  - Preserves existing id, order, and bookmarks when editing
+  - Shows alert if group not found during edit
+  - Validates name is not empty (same as create)
+  - Trims whitespace from name before saving
+  - Saves to localStorage and re-renders after successful edit
+
+- Added event delegation for edit-group button in `App.bindEvents()`:
+  - Handles clicks on buttons with `data-action="edit-group"` attribute
+  - Prevents default behavior and event propagation
+  - Calls `GroupModal.openForEdit(groupId)` with the group ID
+
+### Test Results:
+- 373 tests passed (352 existing + 21 new)
+- Linting passed with no errors or warnings
+
+### New Tests Added:
+openForEdit (7 tests):
+- adds active class to modal
+- sets modal title to Edit Group
+- pre-fills name input with group name
+- sets hidden id field to group id
+- shows alert for non-existent group
+- does not open modal for non-existent group
+- works with second group
+
+handleSubmit for editing (9 tests):
+- updates group name
+- preserves group id when editing
+- preserves group order when editing
+- preserves bookmarks when editing
+- saves updated data to localStorage
+- closes modal after successful edit
+- does not update with empty name
+- trims whitespace from edited name
+- does not change other groups when editing
+
+edit group button event delegation (2 tests):
+- edit group button opens modal for editing
+- edit group button prevents default behavior
+
+rendering after edit (3 tests):
+- updated group name appears in DOM after edit
+- group count stays same after editing
+- bookmarks still display after editing group name

@@ -3927,3 +3927,295 @@ describe('Task 12: Dark Theme Styling and Keyboard Shortcut', () => {
     });
   });
 });
+
+describe('Edit Group', () => {
+  let GroupModal;
+  let App;
+  let STORAGE_KEY;
+
+  beforeEach(() => {
+    document.documentElement.innerHTML = html.replace(/<!DOCTYPE html>/i, '');
+
+    const script = document.querySelector('script');
+    eval(script.textContent);
+
+    GroupModal = window.GroupModal;
+    App = window.App;
+    STORAGE_KEY = window.STORAGE_KEY;
+    localStorage.clear();
+
+    // Initialize the app to set up data and modal
+    App.init();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  describe('openForEdit', () => {
+    test('adds active class to modal', () => {
+      const groupId = App.data.groups[0].id;
+      GroupModal.openForEdit(groupId);
+      expect(GroupModal.modal.classList.contains('active')).toBe(true);
+    });
+
+    test('sets modal title to Edit Group', () => {
+      const groupId = App.data.groups[0].id;
+      GroupModal.openForEdit(groupId);
+      expect(GroupModal.modalTitle.textContent).toBe('Edit Group');
+    });
+
+    test('pre-fills name input with group name', () => {
+      const group = App.data.groups[0];
+      GroupModal.openForEdit(group.id);
+      expect(GroupModal.nameInput.value).toBe(group.name);
+    });
+
+    test('sets hidden id field to group id', () => {
+      const group = App.data.groups[0];
+      GroupModal.openForEdit(group.id);
+      expect(GroupModal.idInput.value).toBe(group.id);
+    });
+
+    test('shows alert for non-existent group', () => {
+      const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {});
+      GroupModal.openForEdit('non-existent-id');
+      expect(alertSpy).toHaveBeenCalledWith('Group not found.');
+      alertSpy.mockRestore();
+    });
+
+    test('does not open modal for non-existent group', () => {
+      const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {});
+      GroupModal.openForEdit('non-existent-id');
+      expect(GroupModal.modal.classList.contains('active')).toBe(false);
+      alertSpy.mockRestore();
+    });
+
+    test('works with second group', () => {
+      const group = App.data.groups[1];
+      GroupModal.openForEdit(group.id);
+      expect(GroupModal.nameInput.value).toBe(group.name);
+      expect(GroupModal.idInput.value).toBe(group.id);
+    });
+  });
+
+  describe('handleSubmit for editing', () => {
+    test('updates group name', () => {
+      const group = App.data.groups[0];
+      const originalId = group.id;
+
+      GroupModal.openForEdit(group.id);
+      GroupModal.nameInput.value = 'Updated Group Name';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      const updatedGroup = App.data.groups.find(g => g.id === originalId);
+      expect(updatedGroup.name).toBe('Updated Group Name');
+    });
+
+    test('preserves group id when editing', () => {
+      const group = App.data.groups[0];
+      const originalId = group.id;
+
+      GroupModal.openForEdit(group.id);
+      GroupModal.nameInput.value = 'ID Preserved';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      const updatedGroup = App.data.groups.find(g => g.id === originalId);
+      expect(updatedGroup).toBeDefined();
+      expect(updatedGroup.id).toBe(originalId);
+    });
+
+    test('preserves group order when editing', () => {
+      const group = App.data.groups[0];
+      const originalOrder = group.order;
+
+      GroupModal.openForEdit(group.id);
+      GroupModal.nameInput.value = 'Order Preserved';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      const updatedGroup = App.data.groups.find(g => g.id === group.id);
+      expect(updatedGroup.order).toBe(originalOrder);
+    });
+
+    test('preserves bookmarks when editing', () => {
+      const group = App.data.groups[0];
+      const originalBookmarkCount = group.bookmarks.length;
+      const originalBookmarkIds = group.bookmarks.map(b => b.id);
+
+      GroupModal.openForEdit(group.id);
+      GroupModal.nameInput.value = 'Bookmarks Preserved';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      const updatedGroup = App.data.groups.find(g => g.id === group.id);
+      expect(updatedGroup.bookmarks.length).toBe(originalBookmarkCount);
+      expect(updatedGroup.bookmarks.map(b => b.id)).toEqual(originalBookmarkIds);
+    });
+
+    test('saves updated data to localStorage', () => {
+      const group = App.data.groups[0];
+
+      GroupModal.openForEdit(group.id);
+      GroupModal.nameInput.value = 'Saved Edit';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      const storedData = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      const savedGroup = storedData.groups.find(g => g.id === group.id);
+      expect(savedGroup.name).toBe('Saved Edit');
+    });
+
+    test('closes modal after successful edit', () => {
+      const group = App.data.groups[0];
+
+      GroupModal.openForEdit(group.id);
+      GroupModal.nameInput.value = 'Close After Edit';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      expect(GroupModal.modal.classList.contains('active')).toBe(false);
+    });
+
+    test('does not update with empty name', () => {
+      const group = App.data.groups[0];
+      const originalName = group.name;
+
+      GroupModal.openForEdit(group.id);
+      GroupModal.nameInput.value = '';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      expect(group.name).toBe(originalName);
+    });
+
+    test('trims whitespace from edited name', () => {
+      const group = App.data.groups[0];
+
+      GroupModal.openForEdit(group.id);
+      GroupModal.nameInput.value = '  Trimmed Edit  ';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      expect(group.name).toBe('Trimmed Edit');
+    });
+
+    test('does not change other groups when editing', () => {
+      const firstGroup = App.data.groups[0];
+      const secondGroup = App.data.groups[1];
+      const originalSecondName = secondGroup.name;
+
+      GroupModal.openForEdit(firstGroup.id);
+      GroupModal.nameInput.value = 'Only First Changed';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      expect(secondGroup.name).toBe(originalSecondName);
+    });
+  });
+
+  describe('edit group button event delegation', () => {
+    test('edit group button opens modal for editing', () => {
+      const container = document.getElementById('groups-container');
+      const editBtn = container.querySelector('[data-action="edit-group"]');
+      const groupId = editBtn.dataset.id;
+
+      editBtn.click();
+
+      expect(GroupModal.modal.classList.contains('active')).toBe(true);
+      expect(GroupModal.modalTitle.textContent).toBe('Edit Group');
+      expect(GroupModal.idInput.value).toBe(groupId);
+    });
+
+    test('edit group button prevents default behavior', () => {
+      const container = document.getElementById('groups-container');
+      const editBtn = container.querySelector('[data-action="edit-group"]');
+
+      const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
+      let defaultPrevented = false;
+      clickEvent.preventDefault = () => { defaultPrevented = true; };
+
+      editBtn.dispatchEvent(clickEvent);
+
+      expect(defaultPrevented).toBe(true);
+    });
+  });
+
+  describe('rendering after edit', () => {
+    test('updated group name appears in DOM after edit', () => {
+      const group = App.data.groups[0];
+
+      GroupModal.openForEdit(group.id);
+      GroupModal.nameInput.value = 'DOM Updated Name';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      const container = document.getElementById('groups-container');
+      const groupTitles = container.querySelectorAll('.group-title');
+      const titles = Array.from(groupTitles).map(el => el.textContent);
+      expect(titles).toContain('DOM Updated Name');
+    });
+
+    test('group count stays same after editing', () => {
+      const initialCount = document.querySelectorAll('.group-card').length;
+      const group = App.data.groups[0];
+
+      GroupModal.openForEdit(group.id);
+      GroupModal.nameInput.value = 'Count Same After Edit';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      const newCount = document.querySelectorAll('.group-card').length;
+      expect(newCount).toBe(initialCount);
+    });
+
+    test('bookmarks still display after editing group name', () => {
+      const group = App.data.groups[0];
+      const bookmarkTitles = group.bookmarks.map(b => b.title);
+
+      GroupModal.openForEdit(group.id);
+      GroupModal.nameInput.value = 'Bookmarks Still There';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      const container = document.getElementById('groups-container');
+      const groupCards = container.querySelectorAll('.group-card');
+      const updatedCard = Array.from(groupCards).find(card =>
+        card.querySelector('.group-title').textContent === 'Bookmarks Still There'
+      );
+
+      const renderedBookmarks = updatedCard.querySelectorAll('.bookmark-title');
+      const renderedTitles = Array.from(renderedBookmarks).map(el => el.textContent);
+
+      bookmarkTitles.forEach(title => {
+        expect(renderedTitles).toContain(title);
+      });
+    });
+  });
+});

@@ -1033,6 +1033,27 @@
         this.nameInput.focus();
       },
 
+      // Open the modal for editing an existing group
+      openForEdit(groupId) {
+        if (!this.modal) return;
+
+        // Find the group
+        const group = App.data.groups.find(g => g.id === groupId);
+
+        if (!group) {
+          alert('Group not found.');
+          return;
+        }
+
+        this.modalTitle.textContent = 'Edit Group';
+        this.form.reset();
+        this.idInput.value = group.id;
+        this.nameInput.value = group.name;
+
+        this.modal.classList.add('active');
+        this.nameInput.focus();
+      },
+
       // Close the modal
       close() {
         if (!this.modal) return;
@@ -1045,26 +1066,40 @@
         e.preventDefault();
 
         const name = this.nameInput.value.trim();
+        const groupId = this.idInput.value;
 
         if (!name) {
           return;
         }
 
-        // Calculate next order value
-        const maxOrder = App.data.groups.length > 0
-          ? Math.max(...App.data.groups.map(g => g.order))
-          : -1;
+        if (groupId) {
+          // Edit existing group
+          const group = App.data.groups.find(g => g.id === groupId);
 
-        // Create new group
-        const newGroup = {
-          id: Storage.generateId(),
-          name: name,
-          order: maxOrder + 1,
-          bookmarks: []
-        };
+          if (!group) {
+            alert('Group not found.');
+            return;
+          }
 
-        // Add to data
-        App.data.groups.push(newGroup);
+          // Update group name
+          group.name = name;
+        } else {
+          // Create new group
+          // Calculate next order value
+          const maxOrder = App.data.groups.length > 0
+            ? Math.max(...App.data.groups.map(g => g.order))
+            : -1;
+
+          const newGroup = {
+            id: Storage.generateId(),
+            name: name,
+            order: maxOrder + 1,
+            bookmarks: []
+          };
+
+          // Add to data
+          App.data.groups.push(newGroup);
+        }
 
         // Save and re-render
         Storage.saveData(App.data);
@@ -1739,6 +1774,16 @@
             const groupId = target.dataset.id;
             if (groupId) {
               this.deleteGroup(groupId);
+            }
+          }
+
+          // Handle group edit button
+          if (target.dataset.action === 'edit-group') {
+            e.preventDefault();
+            e.stopPropagation();
+            const groupId = target.dataset.id;
+            if (groupId) {
+              GroupModal.openForEdit(groupId);
             }
           }
         });
