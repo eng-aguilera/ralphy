@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bookmarks</title>
+  <style>
+    :root {
+      --bg-primary: #1a1a2e;
+      --bg-secondary: #16213e;
+      --bg-card: #0f3460;
+      --text-primary: #eaeaea;
+      --text-secondary: #a0a0a0;
+      --accent: #e94560;
+      --border-radius: 8px;
+      --spacing-sm: 8px;
+      --spacing-md: 16px;
+      --spacing-lg: 24px;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      padding: var(--spacing-lg);
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: var(--spacing-lg);
+      flex-wrap: wrap;
+      gap: var(--spacing-md);
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: var(--spacing-sm);
+      flex-wrap: wrap;
+    }
+
+    .search-container {
+      position: relative;
+    }
+
+    #search-input {
+      background-color: var(--bg-secondary);
+      border: 1px solid var(--bg-card);
+      border-radius: var(--border-radius);
+      padding: var(--spacing-sm) var(--spacing-md);
+      color: var(--text-primary);
+      font-size: 0.875rem;
+      width: 200px;
+      transition: border-color 0.2s;
+    }
+
+    #search-input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    #search-input::placeholder {
+      color: var(--text-secondary);
+    }
+
+    .btn {
+      background-color: var(--bg-card);
+      border: none;
+      border-radius: var(--border-radius);
+      padding: var(--spacing-sm) var(--spacing-md);
+      color: var(--text-primary);
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .btn:hover {
+      background-color: var(--accent);
+    }
+
+    .btn-primary {
+      background-color: var(--accent);
+    }
+
+    .btn-primary:hover {
+      background-color: #d63850;
+    }
+
+    .groups-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: var(--spacing-lg);
+    }
+
+    .group-card {
+      background-color: var(--bg-secondary);
+      border-radius: var(--border-radius);
+      padding: var(--spacing-md);
+      min-height: 150px;
+    }
+
+    .group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: var(--spacing-md);
+      padding-bottom: var(--spacing-sm);
+      border-bottom: 1px solid var(--bg-card);
+    }
+
+    .group-title {
+      font-size: 1rem;
+      font-weight: 500;
+    }
+
+    .group-actions {
+      display: flex;
+      gap: 4px;
+    }
+
+    .group-actions button {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 4px;
+      font-size: 0.75rem;
+      border-radius: 4px;
+      transition: color 0.2s, background-color 0.2s;
+    }
+
+    .group-actions button:hover {
+      color: var(--text-primary);
+      background-color: var(--bg-card);
+    }
+
+    .bookmarks-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-sm);
+    }
+
+    .bookmark-item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      padding: var(--spacing-sm);
+      border-radius: 4px;
+      text-decoration: none;
+      color: var(--text-primary);
+      transition: background-color 0.2s;
+    }
+
+    .bookmark-item:hover {
+      background-color: var(--bg-card);
+    }
+
+    .bookmark-favicon {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+    }
+
+    .bookmark-title {
+      font-size: 0.875rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .bookmark-actions {
+      margin-left: auto;
+      display: flex;
+      gap: 4px;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .bookmark-item:hover .bookmark-actions {
+      opacity: 1;
+    }
+
+    .bookmark-actions button {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 2px 4px;
+      font-size: 0.7rem;
+      border-radius: 4px;
+    }
+
+    .bookmark-actions button:hover {
+      color: var(--text-primary);
+      background-color: var(--bg-primary);
+    }
+
+    .empty-state {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      text-align: center;
+      padding: var(--spacing-lg);
+    }
+
+    /* Modal styles */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      display: none;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal {
+      background-color: var(--bg-secondary);
+      border-radius: var(--border-radius);
+      padding: var(--spacing-lg);
+      width: 90%;
+      max-width: 400px;
+    }
+
+    .modal h2 {
+      font-size: 1.125rem;
+      margin-bottom: var(--spacing-md);
+    }
+
+    .form-group {
+      margin-bottom: var(--spacing-md);
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.875rem;
+      margin-bottom: var(--spacing-sm);
+      color: var(--text-secondary);
+    }
+
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      background-color: var(--bg-primary);
+      border: 1px solid var(--bg-card);
+      border-radius: var(--border-radius);
+      padding: var(--spacing-sm) var(--spacing-md);
+      color: var(--text-primary);
+      font-size: 0.875rem;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: var(--spacing-sm);
+      margin-top: var(--spacing-lg);
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+      body {
+        padding: var(--spacing-md);
+      }
+
+      header {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .header-actions {
+        justify-content: space-between;
+      }
+
+      #search-input {
+        width: 100%;
+        flex: 1;
+      }
+
+      .groups-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .header-actions {
+        flex-direction: column;
+      }
+
+      .btn {
+        width: 100%;
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Bookmarks</h1>
+      <div class="header-actions">
+        <div class="search-container">
+          <input type="text" id="search-input" placeholder="Search bookmarks... (/)" aria-label="Search bookmarks">
+        </div>
+        <button class="btn" id="add-group-btn">+ Group</button>
+        <button class="btn btn-primary" id="add-bookmark-btn">+ Bookmark</button>
+      </div>
+    </header>
+
+    <main id="groups-container" class="groups-grid">
+      <!-- Groups will be rendered here -->
+    </main>
+  </div>
+
+  <!-- Bookmark Modal -->
+  <div class="modal-overlay" id="bookmark-modal">
+    <div class="modal">
+      <h2 id="bookmark-modal-title">Add Bookmark</h2>
+      <form id="bookmark-form">
+        <input type="hidden" id="bookmark-id">
+        <div class="form-group">
+          <label for="bookmark-title">Title</label>
+          <input type="text" id="bookmark-title" required>
+        </div>
+        <div class="form-group">
+          <label for="bookmark-url">URL</label>
+          <input type="url" id="bookmark-url" required placeholder="https://example.com">
+        </div>
+        <div class="form-group">
+          <label for="bookmark-group">Group</label>
+          <select id="bookmark-group" required></select>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn" id="cancel-bookmark-btn">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Group Modal -->
+  <div class="modal-overlay" id="group-modal">
+    <div class="modal">
+      <h2 id="group-modal-title">Add Group</h2>
+      <form id="group-form">
+        <input type="hidden" id="group-id">
+        <div class="form-group">
+          <label for="group-name">Group Name</label>
+          <input type="text" id="group-name" required>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn" id="cancel-group-btn">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // App will be initialized here - placeholder for now
+    const App = {
+      init() {
+        console.log('Bookmark app initialized');
+      }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => App.init());
+  </script>
+</body>
+</html>
