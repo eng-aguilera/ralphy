@@ -606,3 +606,354 @@ describe('Renderer', () => {
     });
   });
 });
+
+describe('BookmarkModal', () => {
+  let BookmarkModal;
+  let App;
+  let SAMPLE_DATA;
+  let STORAGE_KEY;
+
+  beforeEach(() => {
+    document.documentElement.innerHTML = html.replace(/<!DOCTYPE html>/i, '');
+
+    const script = document.querySelector('script');
+    eval(script.textContent);
+
+    BookmarkModal = window.BookmarkModal;
+    App = window.App;
+    SAMPLE_DATA = window.SAMPLE_DATA;
+    STORAGE_KEY = window.STORAGE_KEY;
+    localStorage.clear();
+
+    // Initialize the app to set up data and modal
+    App.init();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  describe('isValidUrl', () => {
+    test('returns true for valid https URL', () => {
+      expect(BookmarkModal.isValidUrl('https://example.com')).toBe(true);
+    });
+
+    test('returns true for valid http URL', () => {
+      expect(BookmarkModal.isValidUrl('http://example.com')).toBe(true);
+    });
+
+    test('returns true for URL with path', () => {
+      expect(BookmarkModal.isValidUrl('https://example.com/path/to/page')).toBe(true);
+    });
+
+    test('returns true for URL with query params', () => {
+      expect(BookmarkModal.isValidUrl('https://example.com?query=value')).toBe(true);
+    });
+
+    test('returns false for URL without protocol', () => {
+      expect(BookmarkModal.isValidUrl('example.com')).toBe(false);
+    });
+
+    test('returns false for empty string', () => {
+      expect(BookmarkModal.isValidUrl('')).toBe(false);
+    });
+
+    test('returns false for random string', () => {
+      expect(BookmarkModal.isValidUrl('not a url')).toBe(false);
+    });
+
+    test('returns false for ftp protocol', () => {
+      expect(BookmarkModal.isValidUrl('ftp://example.com')).toBe(false);
+    });
+
+    test('returns false for javascript protocol', () => {
+      expect(BookmarkModal.isValidUrl('javascript:alert(1)')).toBe(false);
+    });
+  });
+
+  describe('populateGroups', () => {
+    test('populates select with group options', () => {
+      BookmarkModal.populateGroups(SAMPLE_DATA);
+      const options = BookmarkModal.groupSelect.querySelectorAll('option');
+      expect(options.length).toBe(SAMPLE_DATA.groups.length);
+    });
+
+    test('option values are group IDs', () => {
+      BookmarkModal.populateGroups(SAMPLE_DATA);
+      const options = BookmarkModal.groupSelect.querySelectorAll('option');
+      SAMPLE_DATA.groups.forEach((group, i) => {
+        expect(options[i].value).toBe(group.id);
+      });
+    });
+
+    test('option text is group name', () => {
+      BookmarkModal.populateGroups(SAMPLE_DATA);
+      const options = BookmarkModal.groupSelect.querySelectorAll('option');
+      SAMPLE_DATA.groups.forEach((group, i) => {
+        expect(options[i].textContent).toBe(group.name);
+      });
+    });
+
+    test('selects specified group when provided', () => {
+      const groupId = SAMPLE_DATA.groups[1].id;
+      BookmarkModal.populateGroups(SAMPLE_DATA, groupId);
+      expect(BookmarkModal.groupSelect.value).toBe(groupId);
+    });
+
+    test('shows disabled option when no groups', () => {
+      BookmarkModal.populateGroups({ groups: [] });
+      const options = BookmarkModal.groupSelect.querySelectorAll('option');
+      expect(options.length).toBe(1);
+      expect(options[0].disabled).toBe(true);
+      expect(options[0].textContent).toContain('No groups');
+    });
+
+    test('handles null data gracefully', () => {
+      expect(() => BookmarkModal.populateGroups(null)).not.toThrow();
+    });
+  });
+
+  describe('open', () => {
+    test('adds active class to modal', () => {
+      BookmarkModal.open();
+      expect(BookmarkModal.modal.classList.contains('active')).toBe(true);
+    });
+
+    test('sets modal title to Add Bookmark', () => {
+      BookmarkModal.open();
+      expect(BookmarkModal.modalTitle.textContent).toBe('Add Bookmark');
+    });
+
+    test('clears form fields', () => {
+      BookmarkModal.titleInput.value = 'test';
+      BookmarkModal.urlInput.value = 'https://test.com';
+      BookmarkModal.open();
+      expect(BookmarkModal.titleInput.value).toBe('');
+      expect(BookmarkModal.urlInput.value).toBe('');
+    });
+
+    test('clears hidden id field', () => {
+      BookmarkModal.idInput.value = 'some-id';
+      BookmarkModal.open();
+      expect(BookmarkModal.idInput.value).toBe('');
+    });
+
+    test('populates group selector', () => {
+      BookmarkModal.open();
+      const options = BookmarkModal.groupSelect.querySelectorAll('option');
+      expect(options.length).toBe(App.data.groups.length);
+    });
+
+    test('pre-selects group when groupId is provided', () => {
+      const groupId = App.data.groups[2].id;
+      BookmarkModal.open(groupId);
+      expect(BookmarkModal.groupSelect.value).toBe(groupId);
+    });
+  });
+
+  describe('close', () => {
+    test('removes active class from modal', () => {
+      BookmarkModal.open();
+      BookmarkModal.close();
+      expect(BookmarkModal.modal.classList.contains('active')).toBe(false);
+    });
+
+    test('resets form', () => {
+      BookmarkModal.titleInput.value = 'test';
+      BookmarkModal.urlInput.value = 'https://test.com';
+      BookmarkModal.close();
+      expect(BookmarkModal.titleInput.value).toBe('');
+      expect(BookmarkModal.urlInput.value).toBe('');
+    });
+  });
+
+  describe('handleSubmit', () => {
+    beforeEach(() => {
+      BookmarkModal.open();
+    });
+
+    test('creates new bookmark with correct data', () => {
+      const groupId = App.data.groups[0].id;
+      const initialCount = App.data.groups[0].bookmarks.length;
+
+      BookmarkModal.titleInput.value = 'New Site';
+      BookmarkModal.urlInput.value = 'https://newsite.com';
+      BookmarkModal.groupSelect.value = groupId;
+
+      const event = new Event('submit');
+      let preventDefaultCalled = false;
+      event.preventDefault = () => { preventDefaultCalled = true; };
+      BookmarkModal.handleSubmit(event);
+
+      expect(preventDefaultCalled).toBe(true);
+      expect(App.data.groups[0].bookmarks.length).toBe(initialCount + 1);
+
+      const newBookmark = App.data.groups[0].bookmarks[initialCount];
+      expect(newBookmark.title).toBe('New Site');
+      expect(newBookmark.url).toBe('https://newsite.com');
+    });
+
+    test('assigns correct order to new bookmark', () => {
+      const groupId = App.data.groups[0].id;
+      const existingOrders = App.data.groups[0].bookmarks.map(b => b.order);
+      const maxOrder = Math.max(...existingOrders);
+
+      BookmarkModal.titleInput.value = 'Another Site';
+      BookmarkModal.urlInput.value = 'https://another.com';
+      BookmarkModal.groupSelect.value = groupId;
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      BookmarkModal.handleSubmit(event);
+
+      const newBookmark = App.data.groups[0].bookmarks[App.data.groups[0].bookmarks.length - 1];
+      expect(newBookmark.order).toBe(maxOrder + 1);
+    });
+
+    test('generates unique ID for new bookmark', () => {
+      const groupId = App.data.groups[0].id;
+      const existingIds = App.data.groups[0].bookmarks.map(b => b.id);
+
+      BookmarkModal.titleInput.value = 'Unique Site';
+      BookmarkModal.urlInput.value = 'https://unique.com';
+      BookmarkModal.groupSelect.value = groupId;
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      BookmarkModal.handleSubmit(event);
+
+      const newBookmark = App.data.groups[0].bookmarks[App.data.groups[0].bookmarks.length - 1];
+      expect(existingIds).not.toContain(newBookmark.id);
+      expect(newBookmark.id).toMatch(/^id-/);
+    });
+
+    test('saves data to localStorage', () => {
+      const groupId = App.data.groups[0].id;
+
+      BookmarkModal.titleInput.value = 'Saved Site';
+      BookmarkModal.urlInput.value = 'https://saved.com';
+      BookmarkModal.groupSelect.value = groupId;
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      BookmarkModal.handleSubmit(event);
+
+      const storedData = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      const savedBookmark = storedData.groups[0].bookmarks.find(b => b.title === 'Saved Site');
+      expect(savedBookmark).toBeDefined();
+    });
+
+    test('closes modal after successful submission', () => {
+      const groupId = App.data.groups[0].id;
+
+      BookmarkModal.titleInput.value = 'Close Test';
+      BookmarkModal.urlInput.value = 'https://closetest.com';
+      BookmarkModal.groupSelect.value = groupId;
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      BookmarkModal.handleSubmit(event);
+
+      expect(BookmarkModal.modal.classList.contains('active')).toBe(false);
+    });
+
+    test('does not submit with invalid URL', () => {
+      const groupId = App.data.groups[0].id;
+      const initialCount = App.data.groups[0].bookmarks.length;
+
+      BookmarkModal.titleInput.value = 'Invalid Site';
+      BookmarkModal.urlInput.value = 'not-a-valid-url';
+      BookmarkModal.groupSelect.value = groupId;
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      BookmarkModal.handleSubmit(event);
+
+      expect(App.data.groups[0].bookmarks.length).toBe(initialCount);
+    });
+
+    test('trims whitespace from title and URL', () => {
+      const groupId = App.data.groups[0].id;
+
+      BookmarkModal.titleInput.value = '  Trimmed Title  ';
+      BookmarkModal.urlInput.value = '  https://trimmed.com  ';
+      BookmarkModal.groupSelect.value = groupId;
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      BookmarkModal.handleSubmit(event);
+
+      const newBookmark = App.data.groups[0].bookmarks[App.data.groups[0].bookmarks.length - 1];
+      expect(newBookmark.title).toBe('Trimmed Title');
+      expect(newBookmark.url).toBe('https://trimmed.com');
+    });
+
+    test('adds bookmark to correct group', () => {
+      const targetGroup = App.data.groups[1];
+      const initialCount = targetGroup.bookmarks.length;
+
+      BookmarkModal.titleInput.value = 'Group Test';
+      BookmarkModal.urlInput.value = 'https://grouptest.com';
+      BookmarkModal.groupSelect.value = targetGroup.id;
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      BookmarkModal.handleSubmit(event);
+
+      expect(targetGroup.bookmarks.length).toBe(initialCount + 1);
+      expect(targetGroup.bookmarks[initialCount].title).toBe('Group Test');
+    });
+  });
+
+  describe('event bindings', () => {
+    test('cancel button closes modal', () => {
+      BookmarkModal.open();
+      const cancelBtn = document.getElementById('cancel-bookmark-btn');
+      cancelBtn.click();
+      expect(BookmarkModal.modal.classList.contains('active')).toBe(false);
+    });
+
+    test('clicking overlay closes modal', () => {
+      BookmarkModal.open();
+      const clickEvent = new MouseEvent('click', { bubbles: true });
+      Object.defineProperty(clickEvent, 'target', { value: BookmarkModal.modal });
+      BookmarkModal.modal.dispatchEvent(clickEvent);
+      expect(BookmarkModal.modal.classList.contains('active')).toBe(false);
+    });
+
+    test('clicking inside modal does not close it', () => {
+      BookmarkModal.open();
+      const modalContent = BookmarkModal.modal.querySelector('.modal');
+      const clickEvent = new MouseEvent('click', { bubbles: true });
+      Object.defineProperty(clickEvent, 'target', { value: modalContent });
+      BookmarkModal.modal.dispatchEvent(clickEvent);
+      expect(BookmarkModal.modal.classList.contains('active')).toBe(true);
+    });
+
+    test('add bookmark button opens modal', () => {
+      const addBtn = document.getElementById('add-bookmark-btn');
+      addBtn.click();
+      expect(BookmarkModal.modal.classList.contains('active')).toBe(true);
+    });
+  });
+
+  describe('rendering after submission', () => {
+    test('new bookmark appears in DOM after submission', () => {
+      const groupId = App.data.groups[0].id;
+
+      BookmarkModal.open();
+      BookmarkModal.titleInput.value = 'DOM Test Site';
+      BookmarkModal.urlInput.value = 'https://domtest.com';
+      BookmarkModal.groupSelect.value = groupId;
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      BookmarkModal.handleSubmit(event);
+
+      const container = document.getElementById('groups-container');
+      const bookmarkTitles = container.querySelectorAll('.bookmark-title');
+      const titles = Array.from(bookmarkTitles).map(el => el.textContent);
+      expect(titles).toContain('DOM Test Site');
+    });
+  });
+});

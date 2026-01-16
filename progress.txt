@@ -94,3 +94,41 @@ Completed: 2026-01-16
 - createBookmarkElement: 9 tests (element type, href, class, target/rel, data-id, favicon, lazy loading, title, actions)
 - createGroupElement: 8 tests (element type, class, data-id, header/title, actions, bookmarks list, sort order, empty state)
 - render: 7 tests (renders groups, sort order, bookmarks, empty states, clears container, favicons)
+
+## Task 4: Add "New Bookmark" modal with form fields and URL validation
+
+Completed: 2026-01-16
+
+### Changes:
+- Added BookmarkModal object to index.html with:
+  - `init()`: Initializes modal references and binds event handlers
+  - `bindEvents()`: Sets up click handlers for add button, cancel button, overlay click, and form submit
+  - `isValidUrl(urlString)`: Validates URL format (must be http:// or https://)
+  - `populateGroups(data, selectedGroupId)`: Populates group selector dropdown with available groups
+  - `open(groupId)`: Opens modal for adding new bookmark, optionally pre-selecting a group
+  - `close()`: Closes modal and resets form state
+  - `handleSubmit(e)`: Handles form submission with validation, creates bookmark, saves to localStorage
+
+- Features implemented:
+  - URL validation: Only allows http:// and https:// protocols
+  - Group selector: Dynamically populated from available groups
+  - Auto-assigns order value to new bookmarks (max order + 1)
+  - Unique ID generation for each bookmark
+  - Data persistence: Saves to localStorage after adding
+  - Re-renders groups after successful save
+  - Modal closes on: cancel button, overlay click, successful submission
+
+- Updated App.init() to initialize BookmarkModal
+- Exposed BookmarkModal and App to window for testing
+
+### Test Results:
+- 106 tests passed (70 existing + 36 new)
+- Linting passed with no errors
+
+### New Tests Added:
+- isValidUrl: 9 tests (https, http, path, query params, no protocol, empty, random string, ftp, javascript)
+- populateGroups: 6 tests (populates options, values are IDs, text is name, selects specified, no groups, null data)
+- open: 6 tests (active class, modal title, clears fields, clears id, populates groups, pre-selects group)
+- close: 2 tests (removes active class, resets form)
+- handleSubmit: 9 tests (creates bookmark, correct order, unique ID, saves to localStorage, closes modal, invalid URL rejection, trims whitespace, correct group)
+- event bindings: 4 tests (cancel closes, overlay closes, inside click doesn't close, add button opens)

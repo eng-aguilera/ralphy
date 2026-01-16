@@ -594,6 +594,168 @@
       }
     };
 
+    // Modal controller for bookmark operations
+    const BookmarkModal = {
+      modal: null,
+      form: null,
+      titleInput: null,
+      urlInput: null,
+      groupSelect: null,
+      idInput: null,
+      modalTitle: null,
+
+      init() {
+        this.modal = document.getElementById('bookmark-modal');
+        this.form = document.getElementById('bookmark-form');
+        this.titleInput = document.getElementById('bookmark-title');
+        this.urlInput = document.getElementById('bookmark-url');
+        this.groupSelect = document.getElementById('bookmark-group');
+        this.idInput = document.getElementById('bookmark-id');
+        this.modalTitle = document.getElementById('bookmark-modal-title');
+
+        this.bindEvents();
+      },
+
+      bindEvents() {
+        const addBtn = document.getElementById('add-bookmark-btn');
+        const cancelBtn = document.getElementById('cancel-bookmark-btn');
+
+        if (addBtn) {
+          addBtn.addEventListener('click', () => this.open());
+        }
+
+        if (cancelBtn) {
+          cancelBtn.addEventListener('click', () => this.close());
+        }
+
+        if (this.modal) {
+          this.modal.addEventListener('click', (e) => {
+            if (e.target === this.modal) {
+              this.close();
+            }
+          });
+        }
+
+        if (this.form) {
+          this.form.addEventListener('submit', (e) => this.handleSubmit(e));
+        }
+      },
+
+      // Validate URL format
+      isValidUrl(urlString) {
+        try {
+          const url = new URL(urlString);
+          return url.protocol === 'http:' || url.protocol === 'https:';
+        } catch (e) {
+          return false;
+        }
+      },
+
+      // Populate group selector with available groups
+      populateGroups(data, selectedGroupId = null) {
+        if (!this.groupSelect || !data || !data.groups) return;
+
+        this.groupSelect.innerHTML = '';
+
+        if (data.groups.length === 0) {
+          const option = document.createElement('option');
+          option.value = '';
+          option.textContent = 'No groups available';
+          option.disabled = true;
+          this.groupSelect.appendChild(option);
+          return;
+        }
+
+        data.groups.forEach(group => {
+          const option = document.createElement('option');
+          option.value = group.id;
+          option.textContent = group.name;
+          if (selectedGroupId && group.id === selectedGroupId) {
+            option.selected = true;
+          }
+          this.groupSelect.appendChild(option);
+        });
+      },
+
+      // Open the modal for adding a new bookmark
+      open(groupId = null) {
+        if (!this.modal) return;
+
+        this.modalTitle.textContent = 'Add Bookmark';
+        this.form.reset();
+        this.idInput.value = '';
+        this.populateGroups(App.data, groupId);
+
+        // Validate that we have at least one group
+        if (!App.data || !App.data.groups || App.data.groups.length === 0) {
+          alert('Please create a group first before adding bookmarks.');
+          return;
+        }
+
+        this.modal.classList.add('active');
+        this.titleInput.focus();
+      },
+
+      // Close the modal
+      close() {
+        if (!this.modal) return;
+        this.modal.classList.remove('active');
+        this.form.reset();
+        this.urlInput.setCustomValidity('');
+      },
+
+      // Handle form submission
+      handleSubmit(e) {
+        e.preventDefault();
+
+        const title = this.titleInput.value.trim();
+        const url = this.urlInput.value.trim();
+        const groupId = this.groupSelect.value;
+
+        // Validate URL format
+        if (!this.isValidUrl(url)) {
+          this.urlInput.setCustomValidity('Please enter a valid URL starting with http:// or https://');
+          this.urlInput.reportValidity();
+          return;
+        }
+
+        this.urlInput.setCustomValidity('');
+
+        if (!title || !url || !groupId) {
+          return;
+        }
+
+        // Find the target group
+        const group = App.data.groups.find(g => g.id === groupId);
+        if (!group) {
+          alert('Selected group not found.');
+          return;
+        }
+
+        // Calculate next order value
+        const maxOrder = group.bookmarks.length > 0
+          ? Math.max(...group.bookmarks.map(b => b.order))
+          : -1;
+
+        // Create new bookmark
+        const newBookmark = {
+          id: Storage.generateId(),
+          title: title,
+          url: url,
+          order: maxOrder + 1
+        };
+
+        // Add to group
+        group.bookmarks.push(newBookmark);
+
+        // Save and re-render
+        Storage.saveData(App.data);
+        Renderer.render(App.data);
+
+        this.close();
+      }
+    };
+
     // App object
     const App = {
       data: null,
@@ -601,6 +763,7 @@
       init() {
         this.data = Storage.loadData();
         Renderer.render(this.data);
+        BookmarkModal.init();
         console.log('Bookmark app initialized with', this.data.groups.length, 'groups');
       }
     };
@@ -609,6 +772,8 @@
     if (typeof window !== 'undefined') {
       window.Storage = Storage;
       window.Renderer = Renderer;
+      window.BookmarkModal = BookmarkModal;
+      window.App = App;
       window.STORAGE_KEY = STORAGE_KEY;
       window.SAMPLE_DATA = SAMPLE_DATA;
     }
