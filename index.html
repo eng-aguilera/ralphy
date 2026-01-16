@@ -238,6 +238,25 @@
       min-height: 40px;
     }
 
+    /* Group drag and drop styles */
+    .group-card[draggable="true"] {
+      cursor: grab;
+    }
+
+    .group-card[draggable="true"]:active {
+      cursor: grabbing;
+    }
+
+    .group-card.dragging {
+      opacity: 0.5;
+      background-color: var(--bg-card);
+    }
+
+    .group-card.drag-over {
+      border-left: 3px solid var(--accent);
+      margin-left: -3px;
+    }
+
     .empty-state {
       color: var(--text-secondary);
       font-size: 0.875rem;
@@ -546,6 +565,7 @@
         const card = document.createElement('div');
         card.className = 'group-card';
         card.dataset.id = group.id;
+        card.draggable = true;
 
         const header = document.createElement('div');
         header.className = 'group-header';
@@ -1126,6 +1146,139 @@
       }
     };
 
+    // Drag and Drop controller for group reordering
+    const GroupDragDrop = {
+      draggedElement: null,
+      draggedGroupId: null,
+
+      init() {
+        this.bindEvents();
+      },
+
+      bindEvents() {
+        const container = document.getElementById('groups-container');
+        if (!container) return;
+
+        container.addEventListener('dragstart', (e) => this.handleDragStart(e));
+        container.addEventListener('dragend', (e) => this.handleDragEnd(e));
+        container.addEventListener('dragover', (e) => this.handleDragOver(e));
+        container.addEventListener('dragleave', (e) => this.handleDragLeave(e));
+        container.addEventListener('drop', (e) => this.handleDrop(e));
+      },
+
+      handleDragStart(e) {
+        const groupCard = e.target.closest('.group-card');
+        // Only handle if drag started on a group card, not on a bookmark
+        if (!groupCard || e.target.closest('.bookmark-item')) return;
+
+        this.draggedElement = groupCard;
+        this.draggedGroupId = groupCard.dataset.id;
+
+        groupCard.classList.add('dragging');
+
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('application/x-group-id', this.draggedGroupId);
+      },
+
+      handleDragEnd(e) {
+        const groupCard = e.target.closest('.group-card');
+        if (groupCard) {
+          groupCard.classList.remove('dragging');
+        }
+
+        // Remove all drag-over classes from group cards
+        document.querySelectorAll('.group-card.drag-over').forEach(el => el.classList.remove('drag-over'));
+
+        this.draggedElement = null;
+        this.draggedGroupId = null;
+      },
+
+      handleDragOver(e) {
+        // Only handle if we're dragging a group (not a bookmark)
+        if (!this.draggedGroupId) return;
+
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+
+        const groupCard = e.target.closest('.group-card');
+
+        // Remove previous drag-over indicators from groups
+        document.querySelectorAll('.group-card.drag-over').forEach(el => {
+          if (el !== groupCard) el.classList.remove('drag-over');
+        });
+
+        if (groupCard && groupCard !== this.draggedElement) {
+          groupCard.classList.add('drag-over');
+        }
+      },
+
+      handleDragLeave(e) {
+        const groupCard = e.target.closest('.group-card');
+        if (groupCard && !groupCard.contains(e.relatedTarget)) {
+          groupCard.classList.remove('drag-over');
+        }
+      },
+
+      handleDrop(e) {
+        // Only handle if we're dragging a group
+        if (!this.draggedGroupId) return;
+
+        e.preventDefault();
+
+        const targetGroupCard = e.target.closest('.group-card');
+        if (!targetGroupCard || targetGroupCard === this.draggedElement) return;
+
+        const targetGroupId = targetGroupCard.dataset.id;
+        const targetGroup = App.data.groups.find(g => g.id === targetGroupId);
+        const draggedGroup = App.data.groups.find(g => g.id === this.draggedGroupId);
+
+        if (!targetGroup || !draggedGroup) return;
+
+        const newOrder = targetGroup.order;
+        this.reorderGroup(draggedGroup, newOrder);
+
+        // Save and re-render
+        Storage.saveData(App.data);
+        Renderer.render(App.data);
+      },
+
+      reorderGroup(group, newOrder) {
+        const oldOrder = group.order;
+
+        if (oldOrder === newOrder) return;
+
+        // Update orders of other groups
+        if (newOrder < oldOrder) {
+          // Moving up: increment orders of groups between newOrder and oldOrder
+          App.data.groups.forEach(g => {
+            if (g.id !== group.id && g.order >= newOrder && g.order < oldOrder) {
+              g.order++;
+            }
+          });
+        } else {
+          // Moving down: decrement orders of groups between oldOrder and newOrder
+          App.data.groups.forEach(g => {
+            if (g.id !== group.id && g.order > oldOrder && g.order <= newOrder) {
+              g.order--;
+            }
+          });
+        }
+
+        // Set the new order for the dragged group
+        group.order = newOrder;
+
+        // Normalize orders to be sequential (0, 1, 2, ...)
+        this.normalizeOrders();
+      },
+
+      normalizeOrders() {
+        const sorted = [...App.data.groups].sort((a, b) => a.order - b.order);
+        sorted.forEach((group, index) => {
+          group.order = index;
+        });
+      }
+    };
+
     // App object
     const App = {
       data: null,
@@ -1136,6 +1289,7 @@
         BookmarkModal.init();
         GroupModal.init();
         DragDrop.init();
+        GroupDragDrop.init();
         this.bindEvents();
         console.log('Bookmark app initialized with', this.data.groups.length, 'groups');
       },
@@ -1245,6 +1399,7 @@
       window.BookmarkModal = BookmarkModal;
       window.GroupModal = GroupModal;
       window.DragDrop = DragDrop;
+      window.GroupDragDrop = GroupDragDrop;
       window.App = App;
       window.STORAGE_KEY = STORAGE_KEY;
       window.SAMPLE_DATA = SAMPLE_DATA;

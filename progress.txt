@@ -338,3 +338,95 @@ Integration: drag and drop reorders bookmarks (3 tests):
 
 createBookmarkElement with groupId (1 test):
 - passes groupId to createBookmarkElement
+
+## Task 9: Add drag-and-drop reordering for groups themselves
+
+Completed: 2026-01-16
+
+### Changes:
+- Added CSS styles for group drag-and-drop visual feedback:
+  - `.group-card[draggable="true"]`: cursor: grab
+  - `.group-card[draggable="true"]:active`: cursor: grabbing
+  - `.group-card.dragging`: opacity: 0.5, background highlight
+  - `.group-card.drag-over`: left border indicator for drop position
+
+- Modified `createGroupElement(group)`:
+  - Added `draggable="true"` attribute to group cards
+  - Group cards already had `data-id` attribute from previous implementation
+
+- Added GroupDragDrop controller with:
+  - `init()`: Initializes group drag-and-drop functionality
+  - `bindEvents()`: Sets up event delegation on groups-container for drag events
+  - `handleDragStart(e)`: Stores dragged group info, sets effectAllowed, adds dragging class
+    - Checks if drag started on bookmark element (ignores to not interfere with bookmark drag)
+  - `handleDragEnd(e)`: Clears state, removes all visual feedback classes
+  - `handleDragOver(e)`: Prevents default, shows drop position indicators
+  - `handleDragLeave(e)`: Removes hover indicators
+  - `handleDrop(e)`: Reorders group in data model, saves to localStorage, re-renders
+  - `reorderGroup(data, group, newOrder)`: Updates orders of affected groups
+  - `normalizeOrders(data)`: Ensures sequential order values for groups (0, 1, 2, ...)
+
+- Features implemented:
+  - Drag groups to reorder them in the grid layout
+  - Visual feedback during drag (opacity change, cursor change)
+  - Drop position indicator (left border on target group)
+  - Ignores drags that start on bookmark items (bookmark drag takes precedence)
+  - Order normalization ensures clean sequential values
+  - Persists reordered data to localStorage
+  - Re-renders after successful drop
+
+- Updated App.init() to initialize GroupDragDrop
+- Exposed GroupDragDrop to window for testing
+
+### Test Results:
+- 241 tests passed (209 existing + 32 new)
+- Linting passed with no errors
+
+### New Tests Added:
+Group element drag attributes (2 tests):
+- draggable attribute set to true
+- data-id attribute present
+
+CSS group drag styles (4 tests):
+- group dragging class styles present
+- group drag-over class styles present
+- cursor grab styles present
+- active grabbing cursor present
+
+GroupDragDrop controller (4 tests):
+- init method exists
+- bindEvents method exists
+- handleDragStart method exists
+- state properties initialized correctly
+
+handleDragStart for groups (5 tests):
+- sets dragging class on group
+- stores dragged group ID
+- sets effectAllowed to move
+- ignores drag from bookmark element
+- finds closest group-card when dragging from child
+
+handleDragEnd for groups (3 tests):
+- removes dragging class
+- clears draggedGroupId
+- removes drag-over class from all groups
+
+reorderGroup (6 tests):
+- updates group order to new position
+- shifts other groups correctly when moving right
+- shifts other groups correctly when moving left
+- handles moving to same position
+- handles moving to end of list
+- preserves other group properties
+
+normalizeOrders for groups (4 tests):
+- normalizes non-sequential orders to 0, 1, 2...
+- preserves relative order when normalizing
+- handles empty groups array
+- handles single group
+
+Integration: drag and drop reorders groups (4 tests):
+- reordering persists to localStorage
+- reordering updates DOM after re-render
+- all groups remain after reordering
+- bookmarks preserved during group reorder

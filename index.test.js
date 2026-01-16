@@ -2273,3 +2273,361 @@ describe('Drag and Drop Bookmark Sorting', () => {
     });
   });
 });
+
+describe('Drag and Drop Group Reordering', () => {
+  let App;
+  let GroupDragDrop;
+  let Renderer;
+  let Storage;
+  let STORAGE_KEY;
+
+  beforeEach(() => {
+    document.documentElement.innerHTML = html.replace(/<!DOCTYPE html>/i, '');
+
+    const script = document.querySelector('script');
+    eval(script.textContent);
+
+    App = window.App;
+    GroupDragDrop = window.GroupDragDrop;
+    Renderer = window.Renderer;
+    Storage = window.Storage;
+    STORAGE_KEY = window.STORAGE_KEY;
+    localStorage.clear();
+
+    // Initialize the app
+    App.init();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  describe('Group element drag attributes', () => {
+    test('group cards have draggable attribute', () => {
+      const groups = document.querySelectorAll('.group-card');
+      expect(groups.length).toBeGreaterThan(0);
+      groups.forEach(group => {
+        expect(group.draggable).toBe(true);
+      });
+    });
+
+    test('group cards have data-id attribute', () => {
+      const groups = document.querySelectorAll('.group-card');
+      expect(groups.length).toBeGreaterThan(0);
+      groups.forEach(group => {
+        expect(group.dataset.id).toBeDefined();
+        expect(group.dataset.id.length).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  describe('CSS group drag styles', () => {
+    test('has group dragging class styles in CSS', () => {
+      const style = document.querySelector('style');
+      expect(style.textContent).toContain('.group-card.dragging');
+    });
+
+    test('has group drag-over class styles in CSS', () => {
+      const style = document.querySelector('style');
+      expect(style.textContent).toContain('.group-card.drag-over');
+    });
+
+    test('has cursor grab style for draggable group items', () => {
+      const style = document.querySelector('style');
+      expect(style.textContent).toContain('.group-card[draggable="true"]');
+      expect(style.textContent).toContain('cursor: grab');
+    });
+  });
+
+  describe('GroupDragDrop controller initialization', () => {
+    test('GroupDragDrop object exists', () => {
+      expect(GroupDragDrop).toBeDefined();
+    });
+
+    test('GroupDragDrop has init method', () => {
+      expect(typeof GroupDragDrop.init).toBe('function');
+    });
+
+    test('GroupDragDrop has handleDragStart method', () => {
+      expect(typeof GroupDragDrop.handleDragStart).toBe('function');
+    });
+
+    test('GroupDragDrop has handleDragEnd method', () => {
+      expect(typeof GroupDragDrop.handleDragEnd).toBe('function');
+    });
+
+    test('GroupDragDrop has handleDragOver method', () => {
+      expect(typeof GroupDragDrop.handleDragOver).toBe('function');
+    });
+
+    test('GroupDragDrop has handleDrop method', () => {
+      expect(typeof GroupDragDrop.handleDrop).toBe('function');
+    });
+
+    test('GroupDragDrop has reorderGroup method', () => {
+      expect(typeof GroupDragDrop.reorderGroup).toBe('function');
+    });
+
+    test('GroupDragDrop has normalizeOrders method', () => {
+      expect(typeof GroupDragDrop.normalizeOrders).toBe('function');
+    });
+  });
+
+  describe('handleDragStart for groups', () => {
+    test('sets dragging class on group card', () => {
+      const groupCard = document.querySelector('.group-card');
+      const event = new Event('dragstart', { bubbles: true });
+      event.dataTransfer = {
+        effectAllowed: '',
+        setData: () => {}
+      };
+
+      // Dispatch from the group card itself (not from a bookmark inside)
+      GroupDragDrop.handleDragStart({
+        target: groupCard,
+        dataTransfer: event.dataTransfer
+      });
+
+      expect(groupCard.classList.contains('dragging')).toBe(true);
+    });
+
+    test('stores dragged group ID', () => {
+      const groupCard = document.querySelector('.group-card');
+      const groupId = groupCard.dataset.id;
+      const event = {
+        target: groupCard,
+        dataTransfer: {
+          effectAllowed: '',
+          setData: () => {}
+        }
+      };
+
+      GroupDragDrop.handleDragStart(event);
+
+      expect(GroupDragDrop.draggedGroupId).toBe(groupId);
+    });
+
+    test('sets dataTransfer effectAllowed to move', () => {
+      const groupCard = document.querySelector('.group-card');
+      const event = {
+        target: groupCard,
+        dataTransfer: {
+          effectAllowed: '',
+          setData: () => {}
+        }
+      };
+
+      GroupDragDrop.handleDragStart(event);
+
+      expect(event.dataTransfer.effectAllowed).toBe('move');
+    });
+
+    test('does not start drag when dragging a bookmark', () => {
+      const bookmark = document.querySelector('.bookmark-item');
+      const event = {
+        target: bookmark,
+        dataTransfer: {
+          effectAllowed: '',
+          setData: () => {}
+        }
+      };
+
+      GroupDragDrop.handleDragStart(event);
+
+      expect(GroupDragDrop.draggedGroupId).toBeNull();
+    });
+  });
+
+  describe('handleDragEnd for groups', () => {
+    test('removes dragging class from group card', () => {
+      const groupCard = document.querySelector('.group-card');
+      groupCard.classList.add('dragging');
+
+      GroupDragDrop.handleDragEnd({ target: groupCard });
+
+      expect(groupCard.classList.contains('dragging')).toBe(false);
+    });
+
+    test('clears draggedGroupId', () => {
+      const groupCard = document.querySelector('.group-card');
+
+      // Start drag first
+      GroupDragDrop.handleDragStart({
+        target: groupCard,
+        dataTransfer: { effectAllowed: '', setData: () => {} }
+      });
+
+      // End drag
+      GroupDragDrop.handleDragEnd({ target: groupCard });
+
+      expect(GroupDragDrop.draggedGroupId).toBeNull();
+    });
+
+    test('removes drag-over classes from all group cards', () => {
+      const groups = document.querySelectorAll('.group-card');
+      groups.forEach(g => g.classList.add('drag-over'));
+
+      GroupDragDrop.handleDragEnd({ target: groups[0] });
+
+      document.querySelectorAll('.group-card').forEach(g => {
+        expect(g.classList.contains('drag-over')).toBe(false);
+      });
+    });
+  });
+
+  describe('reorderGroup', () => {
+    test('moves group from position 2 to position 0', () => {
+      const group = App.data.groups.find(g => g.order === 2);
+
+      GroupDragDrop.reorderGroup(group, 0);
+
+      expect(group.order).toBe(0);
+      // Verify orders are sequential
+      const orders = App.data.groups.map(g => g.order).sort((a, b) => a - b);
+      expect(orders).toEqual([0, 1, 2]);
+    });
+
+    test('moves group from position 0 to position 2', () => {
+      const group = App.data.groups.find(g => g.order === 0);
+
+      GroupDragDrop.reorderGroup(group, 2);
+
+      expect(group.order).toBe(2);
+      // Verify orders are sequential
+      const orders = App.data.groups.map(g => g.order).sort((a, b) => a - b);
+      expect(orders).toEqual([0, 1, 2]);
+    });
+
+    test('does nothing when moving to same position', () => {
+      const group = App.data.groups.find(g => g.order === 1);
+      const originalOrders = App.data.groups.map(g => ({ id: g.id, order: g.order }));
+
+      GroupDragDrop.reorderGroup(group, 1);
+
+      App.data.groups.forEach(g => {
+        const original = originalOrders.find(o => o.id === g.id);
+        expect(g.order).toBe(original.order);
+      });
+    });
+
+    test('moves group from middle to end', () => {
+      const group = App.data.groups.find(g => g.order === 1);
+
+      GroupDragDrop.reorderGroup(group, 2);
+
+      // After normalization, should be at position 2 (0-indexed)
+      const sorted = [...App.data.groups].sort((a, b) => a.order - b.order);
+      expect(sorted[2].id).toBe(group.id);
+    });
+  });
+
+  describe('normalizeOrders for groups', () => {
+    test('normalizes group orders to sequential values starting from 0', () => {
+      // Manually set non-sequential orders
+      App.data.groups[0].order = 5;
+      App.data.groups[1].order = 2;
+      App.data.groups[2].order = 10;
+
+      GroupDragDrop.normalizeOrders();
+
+      const orders = App.data.groups.map(g => g.order).sort((a, b) => a - b);
+      expect(orders).toEqual([0, 1, 2]);
+    });
+
+    test('preserves relative order when normalizing', () => {
+      // Set specific orders
+      const groupA = App.data.groups.find(g => g.name === 'Development');
+      const groupB = App.data.groups.find(g => g.name === 'Social');
+      const groupC = App.data.groups.find(g => g.name === 'News');
+
+      groupA.order = 10;
+      groupB.order = 5;
+      groupC.order = 15;
+
+      GroupDragDrop.normalizeOrders();
+
+      const sorted = [...App.data.groups].sort((a, b) => a.order - b.order);
+      expect(sorted[0].name).toBe('Social'); // was 5, now 0
+      expect(sorted[1].name).toBe('Development'); // was 10, now 1
+      expect(sorted[2].name).toBe('News'); // was 15, now 2
+    });
+
+    test('handles single group', () => {
+      // Keep only one group
+      App.data.groups = [App.data.groups[0]];
+      App.data.groups[0].order = 5;
+
+      GroupDragDrop.normalizeOrders();
+
+      expect(App.data.groups[0].order).toBe(0);
+    });
+  });
+
+  describe('Integration: drag and drop reorders groups', () => {
+    test('reordering groups persists to localStorage', () => {
+      const group = App.data.groups.find(g => g.order === 2);
+
+      GroupDragDrop.reorderGroup(group, 0);
+      Storage.saveData(App.data);
+
+      const storedData = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      const storedGroup = storedData.groups.find(g => g.id === group.id);
+      expect(storedGroup.order).toBe(0);
+    });
+
+    test('reordering groups updates DOM after re-render', () => {
+      const groupToMove = App.data.groups.find(g => g.order === 2); // News
+      const originalFirstGroup = App.data.groups.find(g => g.order === 0); // Development
+
+      GroupDragDrop.reorderGroup(groupToMove, 0);
+      Renderer.render(App.data);
+
+      const container = document.getElementById('groups-container');
+      const renderedGroups = container.querySelectorAll('.group-card');
+
+      // First group in DOM should now be the moved one (News)
+      expect(renderedGroups[0].dataset.id).toBe(groupToMove.id);
+      // Original first should now be second
+      expect(renderedGroups[1].dataset.id).toBe(originalFirstGroup.id);
+    });
+
+    test('all groups remain after reordering', () => {
+      const originalCount = App.data.groups.length;
+      const originalIds = App.data.groups.map(g => g.id);
+      const group = App.data.groups.find(g => g.order === 1);
+
+      GroupDragDrop.reorderGroup(group, 0);
+
+      expect(App.data.groups.length).toBe(originalCount);
+      const newIds = App.data.groups.map(g => g.id);
+      expect(newIds.sort()).toEqual(originalIds.sort());
+    });
+
+    test('group bookmarks remain intact after reordering', () => {
+      const group = App.data.groups.find(g => g.order === 0);
+      const originalBookmarkCount = group.bookmarks.length;
+      const originalBookmarkIds = group.bookmarks.map(b => b.id);
+
+      GroupDragDrop.reorderGroup(group, 2);
+
+      expect(group.bookmarks.length).toBe(originalBookmarkCount);
+      const newBookmarkIds = group.bookmarks.map(b => b.id);
+      expect(newBookmarkIds.sort()).toEqual(originalBookmarkIds.sort());
+    });
+  });
+
+  describe('createGroupElement with draggable', () => {
+    test('creates group element with draggable true', () => {
+      const testGroup = {
+        id: 'test-group',
+        name: 'Test',
+        order: 0,
+        bookmarks: []
+      };
+
+      const element = Renderer.createGroupElement(testGroup);
+
+      expect(element.draggable).toBe(true);
+    });
+  });
+});
