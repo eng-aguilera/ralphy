@@ -180,5 +180,182 @@ describe('Bookmark Homepage - Base HTML Structure', () => {
       const script = document.querySelector('script');
       expect(script.textContent).toContain('const App');
     });
+
+    test('defines Storage object', () => {
+      const script = document.querySelector('script');
+      expect(script.textContent).toContain('const Storage');
+    });
+
+    test('defines STORAGE_KEY constant', () => {
+      const script = document.querySelector('script');
+      expect(script.textContent).toContain('STORAGE_KEY');
+    });
+
+    test('defines SAMPLE_DATA with groups', () => {
+      const script = document.querySelector('script');
+      expect(script.textContent).toContain('SAMPLE_DATA');
+      expect(script.textContent).toContain('groups');
+    });
+  });
+});
+
+describe('Storage Service', () => {
+  let Storage;
+  let STORAGE_KEY;
+  let SAMPLE_DATA;
+
+  beforeEach(() => {
+    // Reset the document and execute the script
+    document.documentElement.innerHTML = html.replace(/<!DOCTYPE html>/i, '');
+
+    // Extract and evaluate the script content
+    const script = document.querySelector('script');
+    eval(script.textContent);
+
+    Storage = window.Storage;
+    STORAGE_KEY = window.STORAGE_KEY;
+    SAMPLE_DATA = window.SAMPLE_DATA;
+
+    // Clear localStorage before each test
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  describe('generateId', () => {
+    test('returns a string', () => {
+      const id = Storage.generateId();
+      expect(typeof id).toBe('string');
+    });
+
+    test('returns unique IDs', () => {
+      const ids = new Set();
+      for (let i = 0; i < 100; i++) {
+        ids.add(Storage.generateId());
+      }
+      expect(ids.size).toBe(100);
+    });
+
+    test('ID starts with "id-" prefix', () => {
+      const id = Storage.generateId();
+      expect(id.startsWith('id-')).toBe(true);
+    });
+
+    test('ID has reasonable length', () => {
+      const id = Storage.generateId();
+      expect(id.length).toBeGreaterThan(10);
+      expect(id.length).toBeLessThan(30);
+    });
+  });
+
+  describe('saveData', () => {
+    test('saves data to localStorage', () => {
+      const testData = { groups: [{ id: 'test', name: 'Test', order: 0, bookmarks: [] }] };
+      const result = Storage.saveData(testData);
+
+      expect(result).toBe(true);
+      expect(localStorage.getItem(STORAGE_KEY)).toBe(JSON.stringify(testData));
+    });
+
+    test('returns true on successful save', () => {
+      const result = Storage.saveData({ groups: [] });
+      expect(result).toBe(true);
+    });
+
+    test('overwrites existing data', () => {
+      Storage.saveData({ groups: [{ id: '1', name: 'First', order: 0, bookmarks: [] }] });
+      Storage.saveData({ groups: [{ id: '2', name: 'Second', order: 0, bookmarks: [] }] });
+
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      expect(stored.groups.length).toBe(1);
+      expect(stored.groups[0].name).toBe('Second');
+    });
+  });
+
+  describe('loadData', () => {
+    test('returns saved data from localStorage', () => {
+      const testData = { groups: [{ id: 'test', name: 'Test Group', order: 0, bookmarks: [] }] };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(testData));
+
+      const loaded = Storage.loadData();
+      expect(loaded).toEqual(testData);
+    });
+
+    test('initializes with sample data if localStorage is empty', () => {
+      const loaded = Storage.loadData();
+
+      expect(loaded).toEqual(SAMPLE_DATA);
+      // Also verify it was saved to localStorage
+      expect(localStorage.getItem(STORAGE_KEY)).toBe(JSON.stringify(SAMPLE_DATA));
+    });
+
+    test('sample data has correct structure', () => {
+      const loaded = Storage.loadData();
+
+      expect(loaded).toHaveProperty('groups');
+      expect(Array.isArray(loaded.groups)).toBe(true);
+      expect(loaded.groups.length).toBeGreaterThan(0);
+
+      const firstGroup = loaded.groups[0];
+      expect(firstGroup).toHaveProperty('id');
+      expect(firstGroup).toHaveProperty('name');
+      expect(firstGroup).toHaveProperty('order');
+      expect(firstGroup).toHaveProperty('bookmarks');
+      expect(Array.isArray(firstGroup.bookmarks)).toBe(true);
+    });
+
+    test('sample bookmarks have correct structure', () => {
+      const loaded = Storage.loadData();
+      const bookmark = loaded.groups[0].bookmarks[0];
+
+      expect(bookmark).toHaveProperty('id');
+      expect(bookmark).toHaveProperty('title');
+      expect(bookmark).toHaveProperty('url');
+      expect(bookmark).toHaveProperty('order');
+      expect(bookmark.url.startsWith('https://')).toBe(true);
+    });
+
+    test('returns empty groups array on parse error', () => {
+      localStorage.setItem(STORAGE_KEY, 'invalid json{');
+
+      const loaded = Storage.loadData();
+      expect(loaded).toEqual({ groups: [] });
+    });
+  });
+
+  describe('Sample Data', () => {
+    test('contains Development group', () => {
+      const devGroup = SAMPLE_DATA.groups.find(g => g.name === 'Development');
+      expect(devGroup).toBeDefined();
+      expect(devGroup.bookmarks.length).toBeGreaterThan(0);
+    });
+
+    test('contains Social group', () => {
+      const socialGroup = SAMPLE_DATA.groups.find(g => g.name === 'Social');
+      expect(socialGroup).toBeDefined();
+    });
+
+    test('contains News group', () => {
+      const newsGroup = SAMPLE_DATA.groups.find(g => g.name === 'News');
+      expect(newsGroup).toBeDefined();
+    });
+
+    test('groups have sequential order values', () => {
+      const orders = SAMPLE_DATA.groups.map(g => g.order).sort((a, b) => a - b);
+      for (let i = 0; i < orders.length; i++) {
+        expect(orders[i]).toBe(i);
+      }
+    });
+
+    test('bookmarks within groups have sequential order values', () => {
+      SAMPLE_DATA.groups.forEach(group => {
+        const orders = group.bookmarks.map(b => b.order).sort((a, b) => a - b);
+        for (let i = 0; i < orders.length; i++) {
+          expect(orders[i]).toBe(i);
+        }
+      });
+    });
   });
 });

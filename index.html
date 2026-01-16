@@ -387,12 +387,93 @@
   </div>
 
   <script>
-    // App will be initialized here - placeholder for now
-    const App = {
-      init() {
-        console.log('Bookmark app initialized');
+    // Storage key for localStorage
+    const STORAGE_KEY = 'bookmarks-data';
+
+    // Sample bookmarks for initial data
+    const SAMPLE_DATA = {
+      groups: [
+        {
+          id: 'sample-group-1',
+          name: 'Development',
+          order: 0,
+          bookmarks: [
+            { id: 'sample-bm-1', title: 'GitHub', url: 'https://github.com', order: 0 },
+            { id: 'sample-bm-2', title: 'Stack Overflow', url: 'https://stackoverflow.com', order: 1 },
+            { id: 'sample-bm-3', title: 'MDN Web Docs', url: 'https://developer.mozilla.org', order: 2 }
+          ]
+        },
+        {
+          id: 'sample-group-2',
+          name: 'Social',
+          order: 1,
+          bookmarks: [
+            { id: 'sample-bm-4', title: 'Twitter', url: 'https://twitter.com', order: 0 },
+            { id: 'sample-bm-5', title: 'Reddit', url: 'https://reddit.com', order: 1 }
+          ]
+        },
+        {
+          id: 'sample-group-3',
+          name: 'News',
+          order: 2,
+          bookmarks: [
+            { id: 'sample-bm-6', title: 'Hacker News', url: 'https://news.ycombinator.com', order: 0 }
+          ]
+        }
+      ]
+    };
+
+    // Storage service for managing bookmark data
+    const Storage = {
+      // Generate a unique ID
+      generateId() {
+        return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).substr(2, 9);
+      },
+
+      // Load data from localStorage, initialize with sample data if empty
+      loadData() {
+        try {
+          const data = localStorage.getItem(STORAGE_KEY);
+          if (data) {
+            return JSON.parse(data);
+          }
+          // Initialize with sample data if empty
+          this.saveData(SAMPLE_DATA);
+          return SAMPLE_DATA;
+        } catch (e) {
+          console.error('Error loading data from localStorage:', e);
+          return { groups: [] };
+        }
+      },
+
+      // Save data to localStorage
+      saveData(data) {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+          return true;
+        } catch (e) {
+          console.error('Error saving data to localStorage:', e);
+          return false;
+        }
       }
     };
+
+    // App object
+    const App = {
+      data: null,
+
+      init() {
+        this.data = Storage.loadData();
+        console.log('Bookmark app initialized with', this.data.groups.length, 'groups');
+      }
+    };
+
+    // Expose Storage for testing
+    if (typeof window !== 'undefined') {
+      window.Storage = Storage;
+      window.STORAGE_KEY = STORAGE_KEY;
+      window.SAMPLE_DATA = SAMPLE_DATA;
+    }
 
     document.addEventListener('DOMContentLoaded', () => App.init());
   </script>
