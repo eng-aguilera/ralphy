@@ -956,6 +956,260 @@ describe('BookmarkModal', () => {
       expect(titles).toContain('DOM Test Site');
     });
   });
+
+  describe('openForEdit', () => {
+    test('adds active class to modal', () => {
+      const bookmarkId = App.data.groups[0].bookmarks[0].id;
+      BookmarkModal.openForEdit(bookmarkId);
+      expect(BookmarkModal.modal.classList.contains('active')).toBe(true);
+    });
+
+    test('sets modal title to Edit Bookmark', () => {
+      const bookmarkId = App.data.groups[0].bookmarks[0].id;
+      BookmarkModal.openForEdit(bookmarkId);
+      expect(BookmarkModal.modalTitle.textContent).toBe('Edit Bookmark');
+    });
+
+    test('pre-fills form with bookmark data', () => {
+      const bookmark = App.data.groups[0].bookmarks[0];
+      BookmarkModal.openForEdit(bookmark.id);
+      expect(BookmarkModal.titleInput.value).toBe(bookmark.title);
+      expect(BookmarkModal.urlInput.value).toBe(bookmark.url);
+    });
+
+    test('sets hidden id field to bookmark id', () => {
+      const bookmarkId = App.data.groups[0].bookmarks[0].id;
+      BookmarkModal.openForEdit(bookmarkId);
+      expect(BookmarkModal.idInput.value).toBe(bookmarkId);
+    });
+
+    test('selects the correct group in dropdown', () => {
+      const groupId = App.data.groups[0].id;
+      const bookmarkId = App.data.groups[0].bookmarks[0].id;
+      BookmarkModal.openForEdit(bookmarkId);
+      expect(BookmarkModal.groupSelect.value).toBe(groupId);
+    });
+
+    test('handles bookmark from different group', () => {
+      const groupId = App.data.groups[1].id;
+      const bookmark = App.data.groups[1].bookmarks[0];
+      BookmarkModal.openForEdit(bookmark.id);
+      expect(BookmarkModal.groupSelect.value).toBe(groupId);
+      expect(BookmarkModal.titleInput.value).toBe(bookmark.title);
+    });
+
+    test('does not open modal for non-existent bookmark', () => {
+      // Mock alert to avoid actual alert popup
+      const originalAlert = window.alert;
+      let alertMessage = null;
+      window.alert = (msg) => { alertMessage = msg; };
+
+      BookmarkModal.openForEdit('non-existent-id');
+
+      expect(alertMessage).toBe('Bookmark not found.');
+      window.alert = originalAlert;
+    });
+  });
+
+  describe('handleSubmit for editing', () => {
+    test('updates existing bookmark title and url', () => {
+      const bookmark = App.data.groups[0].bookmarks[0];
+      const originalId = bookmark.id;
+      const groupId = App.data.groups[0].id;
+
+      BookmarkModal.openForEdit(bookmark.id);
+      BookmarkModal.titleInput.value = 'Updated Title';
+      BookmarkModal.urlInput.value = 'https://updated.com';
+      BookmarkModal.groupSelect.value = groupId;
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      BookmarkModal.handleSubmit(event);
+
+      const updatedBookmark = App.data.groups[0].bookmarks.find(b => b.id === originalId);
+      expect(updatedBookmark.title).toBe('Updated Title');
+      expect(updatedBookmark.url).toBe('https://updated.com');
+    });
+
+    test('preserves bookmark id when editing', () => {
+      const bookmark = App.data.groups[0].bookmarks[0];
+      const originalId = bookmark.id;
+      const groupId = App.data.groups[0].id;
+
+      BookmarkModal.openForEdit(bookmark.id);
+      BookmarkModal.titleInput.value = 'Changed Title';
+      BookmarkModal.urlInput.value = 'https://changed.com';
+      BookmarkModal.groupSelect.value = groupId;
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      BookmarkModal.handleSubmit(event);
+
+      const updatedBookmark = App.data.groups[0].bookmarks.find(b => b.id === originalId);
+      expect(updatedBookmark).toBeDefined();
+      expect(updatedBookmark.id).toBe(originalId);
+    });
+
+    test('preserves bookmark order when editing in same group', () => {
+      const bookmark = App.data.groups[0].bookmarks[0];
+      const originalOrder = bookmark.order;
+      const groupId = App.data.groups[0].id;
+
+      BookmarkModal.openForEdit(bookmark.id);
+      BookmarkModal.titleInput.value = 'Order Preserved';
+      BookmarkModal.urlInput.value = 'https://order.com';
+      BookmarkModal.groupSelect.value = groupId;
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      BookmarkModal.handleSubmit(event);
+
+      const updatedBookmark = App.data.groups[0].bookmarks.find(b => b.id === bookmark.id);
+      expect(updatedBookmark.order).toBe(originalOrder);
+    });
+
+    test('moves bookmark to different group', () => {
+      const sourceGroup = App.data.groups[0];
+      const targetGroup = App.data.groups[1];
+      const bookmark = sourceGroup.bookmarks[0];
+      const originalCount = sourceGroup.bookmarks.length;
+      const targetOriginalCount = targetGroup.bookmarks.length;
+
+      BookmarkModal.openForEdit(bookmark.id);
+      BookmarkModal.titleInput.value = 'Moved Bookmark';
+      BookmarkModal.urlInput.value = 'https://moved.com';
+      BookmarkModal.groupSelect.value = targetGroup.id;
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      BookmarkModal.handleSubmit(event);
+
+      expect(sourceGroup.bookmarks.length).toBe(originalCount - 1);
+      expect(targetGroup.bookmarks.length).toBe(targetOriginalCount + 1);
+      expect(targetGroup.bookmarks.find(b => b.id === bookmark.id)).toBeDefined();
+    });
+
+    test('assigns new order when moving to different group', () => {
+      const sourceGroup = App.data.groups[0];
+      const targetGroup = App.data.groups[1];
+      const bookmark = sourceGroup.bookmarks[0];
+      const maxOrderInTarget = targetGroup.bookmarks.length > 0
+        ? Math.max(...targetGroup.bookmarks.map(b => b.order))
+        : -1;
+
+      BookmarkModal.openForEdit(bookmark.id);
+      BookmarkModal.titleInput.value = 'New Order';
+      BookmarkModal.urlInput.value = 'https://neworder.com';
+      BookmarkModal.groupSelect.value = targetGroup.id;
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      BookmarkModal.handleSubmit(event);
+
+      const movedBookmark = targetGroup.bookmarks.find(b => b.id === bookmark.id);
+      expect(movedBookmark.order).toBe(maxOrderInTarget + 1);
+    });
+
+    test('saves updated data to localStorage', () => {
+      const bookmark = App.data.groups[0].bookmarks[0];
+      const groupId = App.data.groups[0].id;
+
+      BookmarkModal.openForEdit(bookmark.id);
+      BookmarkModal.titleInput.value = 'Saved Edit';
+      BookmarkModal.urlInput.value = 'https://savededit.com';
+      BookmarkModal.groupSelect.value = groupId;
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      BookmarkModal.handleSubmit(event);
+
+      const storedData = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      const savedBookmark = storedData.groups[0].bookmarks.find(b => b.id === bookmark.id);
+      expect(savedBookmark.title).toBe('Saved Edit');
+      expect(savedBookmark.url).toBe('https://savededit.com');
+    });
+
+    test('closes modal after successful edit', () => {
+      const bookmark = App.data.groups[0].bookmarks[0];
+      const groupId = App.data.groups[0].id;
+
+      BookmarkModal.openForEdit(bookmark.id);
+      BookmarkModal.titleInput.value = 'Close After Edit';
+      BookmarkModal.urlInput.value = 'https://closeedit.com';
+      BookmarkModal.groupSelect.value = groupId;
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      BookmarkModal.handleSubmit(event);
+
+      expect(BookmarkModal.modal.classList.contains('active')).toBe(false);
+    });
+
+    test('validates URL when editing', () => {
+      const bookmark = App.data.groups[0].bookmarks[0];
+      const originalUrl = bookmark.url;
+      const groupId = App.data.groups[0].id;
+
+      BookmarkModal.openForEdit(bookmark.id);
+      BookmarkModal.titleInput.value = 'Invalid URL Edit';
+      BookmarkModal.urlInput.value = 'not-a-valid-url';
+      BookmarkModal.groupSelect.value = groupId;
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      BookmarkModal.handleSubmit(event);
+
+      // URL should not have changed
+      const unchangedBookmark = App.data.groups[0].bookmarks.find(b => b.id === bookmark.id);
+      expect(unchangedBookmark.url).toBe(originalUrl);
+    });
+
+    test('updates DOM after editing', () => {
+      const bookmark = App.data.groups[0].bookmarks[0];
+      const groupId = App.data.groups[0].id;
+
+      BookmarkModal.openForEdit(bookmark.id);
+      BookmarkModal.titleInput.value = 'DOM Updated Title';
+      BookmarkModal.urlInput.value = 'https://domupdated.com';
+      BookmarkModal.groupSelect.value = groupId;
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      BookmarkModal.handleSubmit(event);
+
+      const container = document.getElementById('groups-container');
+      const bookmarkTitles = container.querySelectorAll('.bookmark-title');
+      const titles = Array.from(bookmarkTitles).map(el => el.textContent);
+      expect(titles).toContain('DOM Updated Title');
+    });
+  });
+
+  describe('edit button event delegation', () => {
+    test('edit button click opens modal for editing', () => {
+      const bookmarkId = App.data.groups[0].bookmarks[0].id;
+      const editBtn = document.querySelector(`[data-action="edit"][data-id="${bookmarkId}"]`);
+
+      expect(editBtn).not.toBeNull();
+      editBtn.click();
+
+      expect(BookmarkModal.modal.classList.contains('active')).toBe(true);
+      expect(BookmarkModal.idInput.value).toBe(bookmarkId);
+      expect(BookmarkModal.modalTitle.textContent).toBe('Edit Bookmark');
+    });
+
+    test('edit button click prevents navigation', () => {
+      const bookmarkId = App.data.groups[0].bookmarks[0].id;
+      const editBtn = document.querySelector(`[data-action="edit"][data-id="${bookmarkId}"]`);
+
+      const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
+      let defaultPrevented = false;
+      clickEvent.preventDefault = () => { defaultPrevented = true; };
+
+      editBtn.dispatchEvent(clickEvent);
+
+      expect(defaultPrevented).toBe(true);
+    });
+  });
 });
 
 describe('GroupModal', () => {

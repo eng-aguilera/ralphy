@@ -170,3 +170,37 @@ Completed: 2026-01-16
 - handleSubmit: 10 tests (creates group, correct order, unique ID, empty bookmarks, saves to localStorage, closes modal, empty name rejection, whitespace rejection, trims whitespace, order 0 when no groups)
 - event bindings: 4 tests (cancel closes, overlay closes, inside click doesn't close, add button opens)
 - rendering after submission: 3 tests (group appears in DOM, shows empty state, group count increases)
+
+## Task 6: Implement edit bookmark functionality
+
+Completed: 2026-01-16
+
+### Changes:
+- Added `openForEdit(bookmarkId)` method to BookmarkModal:
+  - Searches all groups to find bookmark by ID
+  - Pre-fills form with existing bookmark data (title, URL)
+  - Sets modal title to "Edit Bookmark"
+  - Selects the correct group in dropdown
+  - Shows alert if bookmark not found
+
+- Modified `handleSubmit()` to support both create and edit modes:
+  - Detects edit mode by checking if idInput has a value
+  - For edit in same group: updates title and URL in place, preserves order
+  - For edit with group change: removes from source group, adds to target group with new order
+  - Validates URL format before saving (same as create)
+  - Saves to localStorage and re-renders after successful edit
+
+- Added `App.bindEvents()` for event delegation:
+  - Listens for clicks on groups-container
+  - Handles edit button clicks via data-action="edit" attribute
+  - Prevents default anchor navigation when clicking edit
+  - Stops event propagation to prevent link following
+
+### Test Results:
+- 152 tests passed (134 existing + 18 new)
+- Linting passed with no errors
+
+### New Tests Added:
+- openForEdit: 7 tests (active class, modal title, pre-fills data, hidden id, correct group, different group, non-existent bookmark)
+- handleSubmit for editing: 9 tests (updates title/url, preserves id, preserves order, moves to different group, assigns new order, saves to localStorage, closes modal, validates URL, updates DOM)
+- edit button event delegation: 2 tests (opens modal for editing, prevents navigation)

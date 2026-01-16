@@ -696,6 +696,38 @@
         this.titleInput.focus();
       },
 
+      // Open the modal for editing an existing bookmark
+      openForEdit(bookmarkId) {
+        if (!this.modal) return;
+
+        // Find the bookmark and its group
+        let bookmark = null;
+        let groupId = null;
+        for (const group of App.data.groups) {
+          const found = group.bookmarks.find(b => b.id === bookmarkId);
+          if (found) {
+            bookmark = found;
+            groupId = group.id;
+            break;
+          }
+        }
+
+        if (!bookmark) {
+          alert('Bookmark not found.');
+          return;
+        }
+
+        this.modalTitle.textContent = 'Edit Bookmark';
+        this.form.reset();
+        this.idInput.value = bookmark.id;
+        this.titleInput.value = bookmark.title;
+        this.urlInput.value = bookmark.url;
+        this.populateGroups(App.data, groupId);
+
+        this.modal.classList.add('active');
+        this.titleInput.focus();
+      },
+
       // Close the modal
       close() {
         if (!this.modal) return;
@@ -711,6 +743,7 @@
         const title = this.titleInput.value.trim();
         const url = this.urlInput.value.trim();
         const groupId = this.groupSelect.value;
+        const bookmarkId = this.idInput.value;
 
         // Validate URL format
         if (!this.isValidUrl(url)) {
@@ -726,27 +759,68 @@
         }
 
         // Find the target group
-        const group = App.data.groups.find(g => g.id === groupId);
-        if (!group) {
+        const targetGroup = App.data.groups.find(g => g.id === groupId);
+        if (!targetGroup) {
           alert('Selected group not found.');
           return;
         }
 
-        // Calculate next order value
-        const maxOrder = group.bookmarks.length > 0
-          ? Math.max(...group.bookmarks.map(b => b.order))
-          : -1;
+        if (bookmarkId) {
+          // Edit existing bookmark
+          // Find current group and bookmark
+          let currentGroup = null;
+          let currentBookmark = null;
+          for (const group of App.data.groups) {
+            const found = group.bookmarks.find(b => b.id === bookmarkId);
+            if (found) {
+              currentGroup = group;
+              currentBookmark = found;
+              break;
+            }
+          }
 
-        // Create new bookmark
-        const newBookmark = {
-          id: Storage.generateId(),
-          title: title,
-          url: url,
-          order: maxOrder + 1
-        };
+          if (!currentBookmark) {
+            alert('Bookmark not found.');
+            return;
+          }
 
-        // Add to group
-        group.bookmarks.push(newBookmark);
+          // Check if moving to a different group
+          if (currentGroup.id !== groupId) {
+            // Remove from current group
+            currentGroup.bookmarks = currentGroup.bookmarks.filter(b => b.id !== bookmarkId);
+
+            // Calculate new order in target group
+            const maxOrder = targetGroup.bookmarks.length > 0
+              ? Math.max(...targetGroup.bookmarks.map(b => b.order))
+              : -1;
+
+            // Add to target group with updated data
+            targetGroup.bookmarks.push({
+              id: bookmarkId,
+              title: title,
+              url: url,
+              order: maxOrder + 1
+            });
+          } else {
+            // Update in place
+            currentBookmark.title = title;
+            currentBookmark.url = url;
+          }
+        } else {
+          // Create new bookmark
+          const maxOrder = targetGroup.bookmarks.length > 0
+            ? Math.max(...targetGroup.bookmarks.map(b => b.order))
+            : -1;
+
+          const newBookmark = {
+            id: Storage.generateId(),
+            title: title,
+            url: url,
+            order: maxOrder + 1
+          };
+
+          targetGroup.bookmarks.push(newBookmark);
+        }
 
         // Save and re-render
         Storage.saveData(App.data);
@@ -861,7 +935,28 @@
         Renderer.render(this.data);
         BookmarkModal.init();
         GroupModal.init();
+        this.bindEvents();
         console.log('Bookmark app initialized with', this.data.groups.length, 'groups');
+      },
+
+      bindEvents() {
+        const container = document.getElementById('groups-container');
+        if (!container) return;
+
+        // Event delegation for bookmark and group actions
+        container.addEventListener('click', (e) => {
+          const target = e.target;
+
+          // Handle bookmark edit button
+          if (target.dataset.action === 'edit') {
+            e.preventDefault();
+            e.stopPropagation();
+            const bookmarkId = target.dataset.id;
+            if (bookmarkId) {
+              BookmarkModal.openForEdit(bookmarkId);
+            }
+          }
+        });
       }
     };
 
