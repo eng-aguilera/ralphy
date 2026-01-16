@@ -957,3 +957,303 @@ describe('BookmarkModal', () => {
     });
   });
 });
+
+describe('GroupModal', () => {
+  let GroupModal;
+  let App;
+  let STORAGE_KEY;
+
+  beforeEach(() => {
+    document.documentElement.innerHTML = html.replace(/<!DOCTYPE html>/i, '');
+
+    const script = document.querySelector('script');
+    eval(script.textContent);
+
+    GroupModal = window.GroupModal;
+    App = window.App;
+    STORAGE_KEY = window.STORAGE_KEY;
+    localStorage.clear();
+
+    // Initialize the app to set up data and modal
+    App.init();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  describe('init', () => {
+    test('initializes modal reference', () => {
+      expect(GroupModal.modal).toBe(document.getElementById('group-modal'));
+    });
+
+    test('initializes form reference', () => {
+      expect(GroupModal.form).toBe(document.getElementById('group-form'));
+    });
+
+    test('initializes nameInput reference', () => {
+      expect(GroupModal.nameInput).toBe(document.getElementById('group-name'));
+    });
+
+    test('initializes idInput reference', () => {
+      expect(GroupModal.idInput).toBe(document.getElementById('group-id'));
+    });
+
+    test('initializes modalTitle reference', () => {
+      expect(GroupModal.modalTitle).toBe(document.getElementById('group-modal-title'));
+    });
+  });
+
+  describe('open', () => {
+    test('adds active class to modal', () => {
+      GroupModal.open();
+      expect(GroupModal.modal.classList.contains('active')).toBe(true);
+    });
+
+    test('sets modal title to Add Group', () => {
+      GroupModal.open();
+      expect(GroupModal.modalTitle.textContent).toBe('Add Group');
+    });
+
+    test('clears name input field', () => {
+      GroupModal.nameInput.value = 'test';
+      GroupModal.open();
+      expect(GroupModal.nameInput.value).toBe('');
+    });
+
+    test('clears hidden id field', () => {
+      GroupModal.idInput.value = 'some-id';
+      GroupModal.open();
+      expect(GroupModal.idInput.value).toBe('');
+    });
+  });
+
+  describe('close', () => {
+    test('removes active class from modal', () => {
+      GroupModal.open();
+      GroupModal.close();
+      expect(GroupModal.modal.classList.contains('active')).toBe(false);
+    });
+
+    test('resets form', () => {
+      GroupModal.nameInput.value = 'test';
+      GroupModal.close();
+      expect(GroupModal.nameInput.value).toBe('');
+    });
+  });
+
+  describe('handleSubmit', () => {
+    beforeEach(() => {
+      GroupModal.open();
+    });
+
+    test('creates new group with correct name', () => {
+      const initialCount = App.data.groups.length;
+
+      GroupModal.nameInput.value = 'New Test Group';
+
+      const event = new Event('submit');
+      let preventDefaultCalled = false;
+      event.preventDefault = () => { preventDefaultCalled = true; };
+      GroupModal.handleSubmit(event);
+
+      expect(preventDefaultCalled).toBe(true);
+      expect(App.data.groups.length).toBe(initialCount + 1);
+
+      const newGroup = App.data.groups[initialCount];
+      expect(newGroup.name).toBe('New Test Group');
+    });
+
+    test('assigns correct order to new group', () => {
+      const existingOrders = App.data.groups.map(g => g.order);
+      const maxOrder = Math.max(...existingOrders);
+
+      GroupModal.nameInput.value = 'Ordered Group';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      const newGroup = App.data.groups[App.data.groups.length - 1];
+      expect(newGroup.order).toBe(maxOrder + 1);
+    });
+
+    test('generates unique ID for new group', () => {
+      const existingIds = App.data.groups.map(g => g.id);
+
+      GroupModal.nameInput.value = 'Unique Group';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      const newGroup = App.data.groups[App.data.groups.length - 1];
+      expect(existingIds).not.toContain(newGroup.id);
+      expect(newGroup.id).toMatch(/^id-/);
+    });
+
+    test('new group has empty bookmarks array', () => {
+      GroupModal.nameInput.value = 'Empty Group';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      const newGroup = App.data.groups[App.data.groups.length - 1];
+      expect(newGroup.bookmarks).toEqual([]);
+    });
+
+    test('saves data to localStorage', () => {
+      GroupModal.nameInput.value = 'Saved Group';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      const storedData = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      const savedGroup = storedData.groups.find(g => g.name === 'Saved Group');
+      expect(savedGroup).toBeDefined();
+    });
+
+    test('closes modal after successful submission', () => {
+      GroupModal.nameInput.value = 'Close Test Group';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      expect(GroupModal.modal.classList.contains('active')).toBe(false);
+    });
+
+    test('does not submit with empty name', () => {
+      const initialCount = App.data.groups.length;
+
+      GroupModal.nameInput.value = '';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      expect(App.data.groups.length).toBe(initialCount);
+    });
+
+    test('does not submit with whitespace-only name', () => {
+      const initialCount = App.data.groups.length;
+
+      GroupModal.nameInput.value = '   ';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      expect(App.data.groups.length).toBe(initialCount);
+    });
+
+    test('trims whitespace from name', () => {
+      GroupModal.nameInput.value = '  Trimmed Group  ';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      const newGroup = App.data.groups[App.data.groups.length - 1];
+      expect(newGroup.name).toBe('Trimmed Group');
+    });
+
+    test('creates group with order 0 when no groups exist', () => {
+      // Clear all groups
+      App.data.groups = [];
+
+      GroupModal.nameInput.value = 'First Group';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      const newGroup = App.data.groups[0];
+      expect(newGroup.order).toBe(0);
+    });
+  });
+
+  describe('event bindings', () => {
+    test('cancel button closes modal', () => {
+      GroupModal.open();
+      const cancelBtn = document.getElementById('cancel-group-btn');
+      cancelBtn.click();
+      expect(GroupModal.modal.classList.contains('active')).toBe(false);
+    });
+
+    test('clicking overlay closes modal', () => {
+      GroupModal.open();
+      const clickEvent = new MouseEvent('click', { bubbles: true });
+      Object.defineProperty(clickEvent, 'target', { value: GroupModal.modal });
+      GroupModal.modal.dispatchEvent(clickEvent);
+      expect(GroupModal.modal.classList.contains('active')).toBe(false);
+    });
+
+    test('clicking inside modal does not close it', () => {
+      GroupModal.open();
+      const modalContent = GroupModal.modal.querySelector('.modal');
+      const clickEvent = new MouseEvent('click', { bubbles: true });
+      Object.defineProperty(clickEvent, 'target', { value: modalContent });
+      GroupModal.modal.dispatchEvent(clickEvent);
+      expect(GroupModal.modal.classList.contains('active')).toBe(true);
+    });
+
+    test('add group button opens modal', () => {
+      const addBtn = document.getElementById('add-group-btn');
+      addBtn.click();
+      expect(GroupModal.modal.classList.contains('active')).toBe(true);
+    });
+  });
+
+  describe('rendering after submission', () => {
+    test('new group appears in DOM after submission', () => {
+      GroupModal.open();
+      GroupModal.nameInput.value = 'DOM Test Group';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      const container = document.getElementById('groups-container');
+      const groupTitles = container.querySelectorAll('.group-title');
+      const titles = Array.from(groupTitles).map(el => el.textContent);
+      expect(titles).toContain('DOM Test Group');
+    });
+
+    test('new group shows empty state message', () => {
+      GroupModal.open();
+      GroupModal.nameInput.value = 'Empty New Group';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      const container = document.getElementById('groups-container');
+      const groups = container.querySelectorAll('.group-card');
+      const newGroupCard = Array.from(groups).find(card =>
+        card.querySelector('.group-title').textContent === 'Empty New Group'
+      );
+
+      expect(newGroupCard).toBeDefined();
+      const emptyState = newGroupCard.querySelector('.empty-state');
+      expect(emptyState).not.toBeNull();
+      expect(emptyState.textContent).toBe('No bookmarks yet');
+    });
+
+    test('group count increases after adding group', () => {
+      const initialCount = document.querySelectorAll('.group-card').length;
+
+      GroupModal.open();
+      GroupModal.nameInput.value = 'Count Test Group';
+
+      const event = new Event('submit');
+      event.preventDefault = () => {};
+      GroupModal.handleSubmit(event);
+
+      const newCount = document.querySelectorAll('.group-card').length;
+      expect(newCount).toBe(initialCount + 1);
+    });
+  });
+});

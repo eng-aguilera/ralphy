@@ -756,6 +756,102 @@
       }
     };
 
+    // Modal controller for group operations
+    const GroupModal = {
+      modal: null,
+      form: null,
+      nameInput: null,
+      idInput: null,
+      modalTitle: null,
+
+      init() {
+        this.modal = document.getElementById('group-modal');
+        this.form = document.getElementById('group-form');
+        this.nameInput = document.getElementById('group-name');
+        this.idInput = document.getElementById('group-id');
+        this.modalTitle = document.getElementById('group-modal-title');
+
+        this.bindEvents();
+      },
+
+      bindEvents() {
+        const addBtn = document.getElementById('add-group-btn');
+        const cancelBtn = document.getElementById('cancel-group-btn');
+
+        if (addBtn) {
+          addBtn.addEventListener('click', () => this.open());
+        }
+
+        if (cancelBtn) {
+          cancelBtn.addEventListener('click', () => this.close());
+        }
+
+        if (this.modal) {
+          this.modal.addEventListener('click', (e) => {
+            if (e.target === this.modal) {
+              this.close();
+            }
+          });
+        }
+
+        if (this.form) {
+          this.form.addEventListener('submit', (e) => this.handleSubmit(e));
+        }
+      },
+
+      // Open the modal for adding a new group
+      open() {
+        if (!this.modal) return;
+
+        this.modalTitle.textContent = 'Add Group';
+        this.form.reset();
+        this.idInput.value = '';
+
+        this.modal.classList.add('active');
+        this.nameInput.focus();
+      },
+
+      // Close the modal
+      close() {
+        if (!this.modal) return;
+        this.modal.classList.remove('active');
+        this.form.reset();
+      },
+
+      // Handle form submission
+      handleSubmit(e) {
+        e.preventDefault();
+
+        const name = this.nameInput.value.trim();
+
+        if (!name) {
+          return;
+        }
+
+        // Calculate next order value
+        const maxOrder = App.data.groups.length > 0
+          ? Math.max(...App.data.groups.map(g => g.order))
+          : -1;
+
+        // Create new group
+        const newGroup = {
+          id: Storage.generateId(),
+          name: name,
+          order: maxOrder + 1,
+          bookmarks: []
+        };
+
+        // Add to data
+        App.data.groups.push(newGroup);
+
+        // Save and re-render
+        Storage.saveData(App.data);
+        Renderer.render(App.data);
+
+        this.close();
+      }
+    };
+
     // App object
     const App = {
       data: null,
@@ -764,6 +860,7 @@
         this.data = Storage.loadData();
         Renderer.render(this.data);
         BookmarkModal.init();
+        GroupModal.init();
         console.log('Bookmark app initialized with', this.data.groups.length, 'groups');
       }
     };
@@ -773,6 +870,7 @@
       window.Storage = Storage;
       window.Renderer = Renderer;
       window.BookmarkModal = BookmarkModal;
+      window.GroupModal = GroupModal;
       window.App = App;
       window.STORAGE_KEY = STORAGE_KEY;
       window.SAMPLE_DATA = SAMPLE_DATA;

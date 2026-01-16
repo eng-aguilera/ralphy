@@ -29,7 +29,7 @@ A minimal, fast local homepage for managing bookmarks with groups and sorting. A
 - [x] Implement localStorage service with functions: loadData, saveData, generateId - initialize with sample bookmarks if empty
 - [x] Build bookmark rendering: display groups as cards with bookmark links inside, show favicons using Google's favicon service (https://www.google.com/s2/favicons?domain=URL)
 - [x] Add "New Bookmark" modal with form fields: title, URL, group selector - validate URL format before saving
-- [ ] Add "New Group" functionality with inline name input, save to localStorage and re-render
+- [x] Add "New Group" functionality with inline name input, save to localStorage and re-render
 - [ ] Implement edit bookmark: click to open modal pre-filled with current data, update on save
 - [ ] Implement delete bookmark and delete group with confirmation prompt
 - [ ] Add drag-and-drop sorting for bookmarks within a group using native HTML5 drag API

@@ -132,3 +132,41 @@ Completed: 2026-01-16
 - close: 2 tests (removes active class, resets form)
 - handleSubmit: 9 tests (creates bookmark, correct order, unique ID, saves to localStorage, closes modal, invalid URL rejection, trims whitespace, correct group)
 - event bindings: 4 tests (cancel closes, overlay closes, inside click doesn't close, add button opens)
+
+## Task 5: Add "New Group" functionality with inline name input
+
+Completed: 2026-01-16
+
+### Changes:
+- Added GroupModal object to index.html with:
+  - `init()`: Initializes modal references and binds event handlers
+  - `bindEvents()`: Sets up click handlers for add button, cancel button, overlay click, and form submit
+  - `open()`: Opens modal for adding new group, clears form, focuses name input
+  - `close()`: Closes modal and resets form state
+  - `handleSubmit(e)`: Handles form submission with validation, creates group, saves to localStorage
+
+- Features implemented:
+  - Name validation: Rejects empty or whitespace-only names
+  - Trims whitespace from group name before saving
+  - Auto-assigns order value to new groups (max order + 1)
+  - Handles edge case when no groups exist (order starts at 0)
+  - Unique ID generation for each group
+  - New groups created with empty bookmarks array
+  - Data persistence: Saves to localStorage after adding
+  - Re-renders groups after successful save
+  - Modal closes on: cancel button, overlay click, successful submission
+
+- Updated App.init() to initialize GroupModal
+- Exposed GroupModal to window for testing
+
+### Test Results:
+- 134 tests passed (106 existing + 28 new)
+- Linting passed with no errors
+
+### New Tests Added:
+- init: 5 tests (modal, form, nameInput, idInput, modalTitle references)
+- open: 4 tests (active class, modal title, clears fields, clears id)
+- close: 2 tests (removes active class, resets form)
+- handleSubmit: 10 tests (creates group, correct order, unique ID, empty bookmarks, saves to localStorage, closes modal, empty name rejection, whitespace rejection, trims whitespace, order 0 when no groups)
+- event bindings: 4 tests (cancel closes, overlay closes, inside click doesn't close, add button opens)
+- rendering after submission: 3 tests (group appears in DOM, shows empty state, group count increases)
