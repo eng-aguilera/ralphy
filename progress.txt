@@ -204,3 +204,43 @@ Completed: 2026-01-16
 - openForEdit: 7 tests (active class, modal title, pre-fills data, hidden id, correct group, different group, non-existent bookmark)
 - handleSubmit for editing: 9 tests (updates title/url, preserves id, preserves order, moves to different group, assigns new order, saves to localStorage, closes modal, validates URL, updates DOM)
 - edit button event delegation: 2 tests (opens modal for editing, prevents navigation)
+
+## Task 7: Implement delete bookmark and delete group with confirmation prompt
+
+Completed: 2026-01-16
+
+### Changes:
+- Added `deleteBookmark(bookmarkId)` method to App:
+  - Finds bookmark across all groups by ID
+  - Shows confirmation dialog with bookmark title: `Delete bookmark "Title"?`
+  - Removes bookmark from group when confirmed
+  - Saves to localStorage and re-renders
+  - Returns early if bookmark not found or cancelled
+
+- Added `deleteGroup(groupId)` method to App:
+  - Finds group by ID
+  - Shows context-aware confirmation message:
+    - Empty group: `Delete group "Name"?`
+    - Group with 1 bookmark: `Delete group "Name" and its 1 bookmark?`
+    - Group with multiple bookmarks: `Delete group "Name" and its N bookmarks?`
+  - Removes group (including all its bookmarks) when confirmed
+  - Saves to localStorage and re-renders
+  - Returns early if group not found or cancelled
+
+- Extended `App.bindEvents()` event delegation:
+  - Handles delete button clicks via `data-action="delete"` attribute
+  - Handles delete-group button clicks via `data-action="delete-group"` attribute
+  - Prevents default behavior and event propagation for both
+
+### Test Results:
+- 174 tests passed (152 existing + 22 new)
+- Linting passed with no errors
+
+### New Tests Added:
+Delete Bookmark (9 tests):
+- deleteBookmark: 7 tests (removes when confirmed, keeps when cancelled, saves to localStorage, updates DOM, shows confirmation with title, ignores non-existent, removes correct bookmark)
+- delete button event delegation: 2 tests (triggers deleteBookmark, prevents navigation)
+
+Delete Group (13 tests):
+- deleteGroup: 10 tests (removes when confirmed, keeps when cancelled, saves to localStorage, updates DOM, shows confirmation for empty group, shows bookmark count, singular/plural bookmark text, ignores non-existent, deletes all bookmarks)
+- delete group button event delegation: 3 tests (triggers deleteGroup, prevents default, shows empty state when last group deleted)

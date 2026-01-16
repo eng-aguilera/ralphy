@@ -956,7 +956,84 @@
               BookmarkModal.openForEdit(bookmarkId);
             }
           }
+
+          // Handle bookmark delete button
+          if (target.dataset.action === 'delete') {
+            e.preventDefault();
+            e.stopPropagation();
+            const bookmarkId = target.dataset.id;
+            if (bookmarkId) {
+              this.deleteBookmark(bookmarkId);
+            }
+          }
+
+          // Handle group delete button
+          if (target.dataset.action === 'delete-group') {
+            e.preventDefault();
+            e.stopPropagation();
+            const groupId = target.dataset.id;
+            if (groupId) {
+              this.deleteGroup(groupId);
+            }
+          }
         });
+      },
+
+      // Delete a bookmark with confirmation
+      deleteBookmark(bookmarkId) {
+        // Find the bookmark to get its title for the confirmation message
+        let bookmark = null;
+        let group = null;
+        for (const g of this.data.groups) {
+          const found = g.bookmarks.find(b => b.id === bookmarkId);
+          if (found) {
+            bookmark = found;
+            group = g;
+            break;
+          }
+        }
+
+        if (!bookmark) {
+          return;
+        }
+
+        const confirmed = confirm(`Delete bookmark "${bookmark.title}"?`);
+        if (!confirmed) {
+          return;
+        }
+
+        // Remove bookmark from group
+        group.bookmarks = group.bookmarks.filter(b => b.id !== bookmarkId);
+
+        // Save and re-render
+        Storage.saveData(this.data);
+        Renderer.render(this.data);
+      },
+
+      // Delete a group with confirmation
+      deleteGroup(groupId) {
+        const group = this.data.groups.find(g => g.id === groupId);
+
+        if (!group) {
+          return;
+        }
+
+        const bookmarkCount = group.bookmarks.length;
+        const message = bookmarkCount > 0
+          ? `Delete group "${group.name}" and its ${bookmarkCount} bookmark${bookmarkCount === 1 ? '' : 's'}?`
+          : `Delete group "${group.name}"?`;
+
+        const confirmed = confirm(message);
+        if (!confirmed) {
+          return;
+        }
+
+        // Remove group from data
+        this.data.groups = this.data.groups.filter(g => g.id !== groupId);
+
+        // Save and re-render
+        Storage.saveData(this.data);
+        Renderer.render(this.data);
       }
     };
 

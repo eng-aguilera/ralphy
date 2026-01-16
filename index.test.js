@@ -1511,3 +1511,354 @@ describe('GroupModal', () => {
     });
   });
 });
+
+describe('Delete Bookmark', () => {
+  let App;
+  let STORAGE_KEY;
+  let originalConfirm;
+
+  beforeEach(() => {
+    document.documentElement.innerHTML = html.replace(/<!DOCTYPE html>/i, '');
+
+    const script = document.querySelector('script');
+    eval(script.textContent);
+
+    App = window.App;
+    STORAGE_KEY = window.STORAGE_KEY;
+    localStorage.clear();
+
+    // Initialize the app
+    App.init();
+
+    // Mock confirm to return true by default
+    originalConfirm = window.confirm;
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    window.confirm = originalConfirm;
+  });
+
+  describe('deleteBookmark', () => {
+    test('removes bookmark from group when confirmed', () => {
+      window.confirm = () => true;
+      const group = App.data.groups[0];
+      const bookmarkId = group.bookmarks[0].id;
+      const initialCount = group.bookmarks.length;
+
+      App.deleteBookmark(bookmarkId);
+
+      expect(group.bookmarks.length).toBe(initialCount - 1);
+      expect(group.bookmarks.find(b => b.id === bookmarkId)).toBeUndefined();
+    });
+
+    test('does not remove bookmark when cancelled', () => {
+      window.confirm = () => false;
+      const group = App.data.groups[0];
+      const bookmarkId = group.bookmarks[0].id;
+      const initialCount = group.bookmarks.length;
+
+      App.deleteBookmark(bookmarkId);
+
+      expect(group.bookmarks.length).toBe(initialCount);
+      expect(group.bookmarks.find(b => b.id === bookmarkId)).toBeDefined();
+    });
+
+    test('saves to localStorage after deletion', () => {
+      window.confirm = () => true;
+      const group = App.data.groups[0];
+      const bookmarkId = group.bookmarks[0].id;
+
+      App.deleteBookmark(bookmarkId);
+
+      const storedData = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      const storedGroup = storedData.groups.find(g => g.id === group.id);
+      expect(storedGroup.bookmarks.find(b => b.id === bookmarkId)).toBeUndefined();
+    });
+
+    test('updates DOM after deletion', () => {
+      window.confirm = () => true;
+      const bookmarkId = App.data.groups[0].bookmarks[0].id;
+
+      App.deleteBookmark(bookmarkId);
+
+      const container = document.getElementById('groups-container');
+      const bookmarkElement = container.querySelector(`[data-id="${bookmarkId}"]`);
+      expect(bookmarkElement).toBeNull();
+    });
+
+    test('shows confirmation dialog with bookmark title', () => {
+      let confirmMessage = null;
+      window.confirm = (msg) => {
+        confirmMessage = msg;
+        return false;
+      };
+
+      const bookmark = App.data.groups[0].bookmarks[0];
+      App.deleteBookmark(bookmark.id);
+
+      expect(confirmMessage).toContain(bookmark.title);
+      expect(confirmMessage).toContain('Delete bookmark');
+    });
+
+    test('does nothing for non-existent bookmark', () => {
+      window.confirm = () => true;
+      const initialData = JSON.stringify(App.data);
+
+      App.deleteBookmark('non-existent-id');
+
+      expect(JSON.stringify(App.data)).toBe(initialData);
+    });
+
+    test('removes correct bookmark from group with multiple bookmarks', () => {
+      window.confirm = () => true;
+      const group = App.data.groups[0];
+      const bookmarkToDelete = group.bookmarks[1];
+      const remainingBookmarkIds = group.bookmarks
+        .filter(b => b.id !== bookmarkToDelete.id)
+        .map(b => b.id);
+
+      App.deleteBookmark(bookmarkToDelete.id);
+
+      expect(group.bookmarks.map(b => b.id)).toEqual(remainingBookmarkIds);
+    });
+  });
+
+  describe('delete button event delegation', () => {
+    test('delete button click triggers deleteBookmark', () => {
+      window.confirm = () => true;
+      const bookmarkId = App.data.groups[0].bookmarks[0].id;
+      const deleteBtn = document.querySelector(`[data-action="delete"][data-id="${bookmarkId}"]`);
+      const initialCount = App.data.groups[0].bookmarks.length;
+
+      expect(deleteBtn).not.toBeNull();
+      deleteBtn.click();
+
+      expect(App.data.groups[0].bookmarks.length).toBe(initialCount - 1);
+    });
+
+    test('delete button click prevents navigation', () => {
+      window.confirm = () => false;
+      const bookmarkId = App.data.groups[0].bookmarks[0].id;
+      const deleteBtn = document.querySelector(`[data-action="delete"][data-id="${bookmarkId}"]`);
+
+      const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
+      let defaultPrevented = false;
+      clickEvent.preventDefault = () => { defaultPrevented = true; };
+
+      deleteBtn.dispatchEvent(clickEvent);
+
+      expect(defaultPrevented).toBe(true);
+    });
+  });
+});
+
+describe('Delete Group', () => {
+  let App;
+  let STORAGE_KEY;
+  let originalConfirm;
+
+  beforeEach(() => {
+    document.documentElement.innerHTML = html.replace(/<!DOCTYPE html>/i, '');
+
+    const script = document.querySelector('script');
+    eval(script.textContent);
+
+    App = window.App;
+    STORAGE_KEY = window.STORAGE_KEY;
+    localStorage.clear();
+
+    // Initialize the app
+    App.init();
+
+    // Mock confirm to return true by default
+    originalConfirm = window.confirm;
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    window.confirm = originalConfirm;
+  });
+
+  describe('deleteGroup', () => {
+    test('removes group when confirmed', () => {
+      window.confirm = () => true;
+      const groupId = App.data.groups[0].id;
+      const initialCount = App.data.groups.length;
+
+      App.deleteGroup(groupId);
+
+      expect(App.data.groups.length).toBe(initialCount - 1);
+      expect(App.data.groups.find(g => g.id === groupId)).toBeUndefined();
+    });
+
+    test('does not remove group when cancelled', () => {
+      window.confirm = () => false;
+      const groupId = App.data.groups[0].id;
+      const initialCount = App.data.groups.length;
+
+      App.deleteGroup(groupId);
+
+      expect(App.data.groups.length).toBe(initialCount);
+      expect(App.data.groups.find(g => g.id === groupId)).toBeDefined();
+    });
+
+    test('saves to localStorage after deletion', () => {
+      window.confirm = () => true;
+      const groupId = App.data.groups[0].id;
+
+      App.deleteGroup(groupId);
+
+      const storedData = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      expect(storedData.groups.find(g => g.id === groupId)).toBeUndefined();
+    });
+
+    test('updates DOM after deletion', () => {
+      window.confirm = () => true;
+      const groupId = App.data.groups[0].id;
+
+      App.deleteGroup(groupId);
+
+      const container = document.getElementById('groups-container');
+      const groupElement = container.querySelector(`[data-id="${groupId}"]`);
+      expect(groupElement).toBeNull();
+    });
+
+    test('shows confirmation dialog with group name for empty group', () => {
+      // Create an empty group first
+      App.data.groups.push({
+        id: 'empty-group',
+        name: 'Empty Test Group',
+        order: 10,
+        bookmarks: []
+      });
+
+      let confirmMessage = null;
+      window.confirm = (msg) => {
+        confirmMessage = msg;
+        return false;
+      };
+
+      App.deleteGroup('empty-group');
+
+      expect(confirmMessage).toBe('Delete group "Empty Test Group"?');
+    });
+
+    test('shows confirmation dialog with bookmark count for group with bookmarks', () => {
+      let confirmMessage = null;
+      window.confirm = (msg) => {
+        confirmMessage = msg;
+        return false;
+      };
+
+      const group = App.data.groups[0];
+      const bookmarkCount = group.bookmarks.length;
+      App.deleteGroup(group.id);
+
+      expect(confirmMessage).toContain(group.name);
+      expect(confirmMessage).toContain(bookmarkCount.toString());
+      expect(confirmMessage).toContain('bookmark');
+    });
+
+    test('uses singular "bookmark" for group with one bookmark', () => {
+      // Create a group with exactly one bookmark
+      App.data.groups.push({
+        id: 'single-bm-group',
+        name: 'Single Bookmark Group',
+        order: 10,
+        bookmarks: [{ id: 'bm1', title: 'Test', url: 'https://test.com', order: 0 }]
+      });
+
+      let confirmMessage = null;
+      window.confirm = (msg) => {
+        confirmMessage = msg;
+        return false;
+      };
+
+      App.deleteGroup('single-bm-group');
+
+      expect(confirmMessage).toContain('1 bookmark');
+      expect(confirmMessage).not.toContain('1 bookmarks');
+    });
+
+    test('uses plural "bookmarks" for group with multiple bookmarks', () => {
+      let confirmMessage = null;
+      window.confirm = (msg) => {
+        confirmMessage = msg;
+        return false;
+      };
+
+      const group = App.data.groups[0]; // Development group has 3 bookmarks
+      App.deleteGroup(group.id);
+
+      expect(confirmMessage).toContain('bookmarks');
+    });
+
+    test('does nothing for non-existent group', () => {
+      window.confirm = () => true;
+      const initialData = JSON.stringify(App.data);
+
+      App.deleteGroup('non-existent-id');
+
+      expect(JSON.stringify(App.data)).toBe(initialData);
+    });
+
+    test('deletes all bookmarks within the group', () => {
+      window.confirm = () => true;
+      const group = App.data.groups[0];
+      const bookmarkIds = group.bookmarks.map(b => b.id);
+
+      App.deleteGroup(group.id);
+
+      // Verify bookmarks don't exist in any group
+      bookmarkIds.forEach(bookmarkId => {
+        const found = App.data.groups.some(g =>
+          g.bookmarks.some(b => b.id === bookmarkId)
+        );
+        expect(found).toBe(false);
+      });
+    });
+  });
+
+  describe('delete group button event delegation', () => {
+    test('delete group button click triggers deleteGroup', () => {
+      window.confirm = () => true;
+      const groupId = App.data.groups[0].id;
+      const deleteBtn = document.querySelector(`[data-action="delete-group"][data-id="${groupId}"]`);
+      const initialCount = App.data.groups.length;
+
+      expect(deleteBtn).not.toBeNull();
+      deleteBtn.click();
+
+      expect(App.data.groups.length).toBe(initialCount - 1);
+    });
+
+    test('delete group button click prevents default behavior', () => {
+      window.confirm = () => false;
+      const groupId = App.data.groups[0].id;
+      const deleteBtn = document.querySelector(`[data-action="delete-group"][data-id="${groupId}"]`);
+
+      const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
+      let defaultPrevented = false;
+      clickEvent.preventDefault = () => { defaultPrevented = true; };
+
+      deleteBtn.dispatchEvent(clickEvent);
+
+      expect(defaultPrevented).toBe(true);
+    });
+
+    test('shows empty state when last group is deleted', () => {
+      window.confirm = () => true;
+
+      // Delete all groups one by one
+      while (App.data.groups.length > 0) {
+        App.deleteGroup(App.data.groups[0].id);
+      }
+
+      const container = document.getElementById('groups-container');
+      const emptyState = container.querySelector('.empty-state');
+      expect(emptyState).not.toBeNull();
+      expect(emptyState.textContent).toContain('No bookmark groups yet');
+    });
+  });
+});
