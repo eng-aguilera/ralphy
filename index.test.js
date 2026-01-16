@@ -2631,3 +2631,297 @@ describe('Drag and Drop Group Reordering', () => {
     });
   });
 });
+
+describe('Search', () => {
+  let Search;
+  let App;
+  let Storage;
+  let Renderer;
+
+  beforeEach(() => {
+    document.documentElement.innerHTML = html.replace(/<!DOCTYPE html>/i, '');
+    const script = document.querySelector('script');
+    eval(script.textContent);
+
+    Search = window.Search;
+    App = window.App;
+    Storage = window.Storage;
+    Renderer = window.Renderer;
+    STORAGE_KEY = window.STORAGE_KEY;
+
+    localStorage.clear();
+    App.data = Storage.loadData();
+    Renderer.render(App.data);
+    Search.init();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  describe('init', () => {
+    test('initializes searchInput reference', () => {
+      expect(Search.searchInput).not.toBeNull();
+      expect(Search.searchInput.id).toBe('search-input');
+    });
+
+    test('initializes currentQuery as empty string', () => {
+      expect(Search.currentQuery).toBe('');
+    });
+  });
+
+  describe('filterBookmarks', () => {
+    const bookmarks = [
+      { id: '1', title: 'GitHub', url: 'https://github.com', order: 0 },
+      { id: '2', title: 'Stack Overflow', url: 'https://stackoverflow.com', order: 1 },
+      { id: '3', title: 'MDN Docs', url: 'https://developer.mozilla.org', order: 2 }
+    ];
+
+    test('returns all bookmarks when query is empty', () => {
+      const result = Search.filterBookmarks(bookmarks, '');
+      expect(result.length).toBe(3);
+    });
+
+    test('filters by title (case insensitive)', () => {
+      const result = Search.filterBookmarks(bookmarks, 'github');
+      expect(result.length).toBe(1);
+      expect(result[0].title).toBe('GitHub');
+    });
+
+    test('filters by URL', () => {
+      const result = Search.filterBookmarks(bookmarks, 'stackoverflow');
+      expect(result.length).toBe(1);
+      expect(result[0].title).toBe('Stack Overflow');
+    });
+
+    test('filters partial match in title', () => {
+      const result = Search.filterBookmarks(bookmarks, 'git');
+      expect(result.length).toBe(1);
+    });
+
+    test('filters partial match in URL', () => {
+      const result = Search.filterBookmarks(bookmarks, 'mozilla');
+      expect(result.length).toBe(1);
+      expect(result[0].title).toBe('MDN Docs');
+    });
+
+    test('returns empty array when no matches', () => {
+      const result = Search.filterBookmarks(bookmarks, 'xyz123');
+      expect(result.length).toBe(0);
+    });
+
+    test('matches are case insensitive for titles', () => {
+      // Query is expected to be lowercase (handleSearch lowercases it)
+      const result = Search.filterBookmarks(bookmarks, 'github');
+      expect(result.length).toBe(1);
+      expect(result[0].title).toBe('GitHub'); // Title is mixed case, query is lowercase
+    });
+
+    test('returns multiple matches', () => {
+      const result = Search.filterBookmarks(bookmarks, 'com');
+      expect(result.length).toBe(2); // github.com and stackoverflow.com
+    });
+  });
+
+  describe('handleSearch', () => {
+    test('sets currentQuery to lowercase trimmed value', () => {
+      Search.handleSearch('  GitHub  ');
+      expect(Search.currentQuery).toBe('github');
+    });
+
+    test('handles empty string', () => {
+      Search.handleSearch('');
+      expect(Search.currentQuery).toBe('');
+    });
+
+    test('handles whitespace-only string', () => {
+      Search.handleSearch('   ');
+      expect(Search.currentQuery).toBe('');
+    });
+  });
+
+  describe('clear', () => {
+    test('resets currentQuery to empty string', () => {
+      Search.currentQuery = 'test';
+      Search.clear();
+      expect(Search.currentQuery).toBe('');
+    });
+
+    test('clears search input value', () => {
+      Search.searchInput.value = 'test';
+      Search.clear();
+      expect(Search.searchInput.value).toBe('');
+    });
+
+    test('re-renders all bookmarks', () => {
+      // First filter
+      Search.handleSearch('github');
+      const container = document.getElementById('groups-container');
+
+      // Clear should restore all groups
+      Search.clear();
+      const allGroups = container.querySelectorAll('.group-card');
+
+      expect(allGroups.length).toBe(3); // All sample groups
+    });
+  });
+
+  describe('renderFiltered', () => {
+    test('shows all groups when query is empty', () => {
+      Search.currentQuery = '';
+      Search.renderFiltered();
+
+      const container = document.getElementById('groups-container');
+      const groups = container.querySelectorAll('.group-card');
+      expect(groups.length).toBe(3);
+    });
+
+    test('filters bookmarks across all groups', () => {
+      Search.handleSearch('github');
+
+      const container = document.getElementById('groups-container');
+      const bookmarks = container.querySelectorAll('.bookmark-item');
+
+      expect(bookmarks.length).toBe(1);
+      expect(bookmarks[0].querySelector('.bookmark-title').textContent).toBe('GitHub');
+    });
+
+    test('hides groups with no matching bookmarks', () => {
+      Search.handleSearch('github'); // Only in Development group
+
+      const container = document.getElementById('groups-container');
+      const groups = container.querySelectorAll('.group-card');
+
+      expect(groups.length).toBe(1);
+      expect(groups[0].querySelector('.group-title').textContent).toBe('Development');
+    });
+
+    test('shows "no results" message when nothing matches', () => {
+      Search.handleSearch('xyznonexistent123');
+
+      const container = document.getElementById('groups-container');
+      const emptyState = container.querySelector('.empty-state');
+
+      expect(emptyState).not.toBeNull();
+      expect(emptyState.textContent).toContain('No bookmarks found');
+      expect(emptyState.textContent).toContain('xyznonexistent123');
+    });
+
+    test('filters show multiple matching bookmarks', () => {
+      Search.handleSearch('com'); // matches multiple URLs
+
+      const container = document.getElementById('groups-container');
+      const bookmarks = container.querySelectorAll('.bookmark-item');
+
+      expect(bookmarks.length).toBeGreaterThan(1);
+    });
+
+    test('preserves group order when filtering', () => {
+      // Add bookmark to News that matches 'test'
+      App.data.groups.find(g => g.name === 'News').bookmarks.push(
+        { id: 'test-1', title: 'Test Site', url: 'https://test.com', order: 1 }
+      );
+      App.data.groups.find(g => g.name === 'Development').bookmarks.push(
+        { id: 'test-2', title: 'Test Dev', url: 'https://testdev.com', order: 3 }
+      );
+
+      Search.handleSearch('test');
+
+      const container = document.getElementById('groups-container');
+      const groups = container.querySelectorAll('.group-card');
+
+      // Development comes before News in order
+      expect(groups[0].querySelector('.group-title').textContent).toBe('Development');
+      expect(groups[1].querySelector('.group-title').textContent).toBe('News');
+    });
+  });
+
+  describe('getMatchCount', () => {
+    test('returns 0 when query is empty', () => {
+      Search.currentQuery = '';
+      expect(Search.getMatchCount()).toBe(0);
+    });
+
+    test('returns correct count for matching bookmarks', () => {
+      Search.currentQuery = 'github';
+      expect(Search.getMatchCount()).toBe(1);
+    });
+
+    test('returns 0 when no matches', () => {
+      Search.currentQuery = 'xyznonexistent';
+      expect(Search.getMatchCount()).toBe(0);
+    });
+
+    test('returns count across all groups', () => {
+      // 'com' appears in multiple URLs
+      Search.currentQuery = 'com';
+      const count = Search.getMatchCount();
+      expect(count).toBeGreaterThan(1);
+    });
+  });
+
+  describe('event bindings', () => {
+    test('typing in search input triggers filtering', () => {
+      const input = document.getElementById('search-input');
+      input.value = 'github';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+
+      expect(Search.currentQuery).toBe('github');
+    });
+
+    test('Escape key clears search', () => {
+      Search.searchInput.value = 'test';
+      Search.currentQuery = 'test';
+
+      const event = new KeyboardEvent('keydown', { key: 'Escape' });
+      Search.searchInput.dispatchEvent(event);
+
+      expect(Search.currentQuery).toBe('');
+      expect(Search.searchInput.value).toBe('');
+    });
+  });
+
+  describe('Integration: search and render', () => {
+    test('filtering then clearing restores all bookmarks', () => {
+      const container = document.getElementById('groups-container');
+
+      // Count initial bookmarks
+      const initialBookmarks = container.querySelectorAll('.bookmark-item').length;
+
+      // Filter
+      Search.handleSearch('github');
+      const filteredBookmarks = container.querySelectorAll('.bookmark-item').length;
+      expect(filteredBookmarks).toBeLessThan(initialBookmarks);
+
+      // Clear
+      Search.clear();
+      const restoredBookmarks = container.querySelectorAll('.bookmark-item').length;
+      expect(restoredBookmarks).toBe(initialBookmarks);
+    });
+
+    test('filtered results have correct bookmark IDs', () => {
+      Search.handleSearch('github');
+
+      const container = document.getElementById('groups-container');
+      const bookmark = container.querySelector('.bookmark-item');
+
+      // Find the actual GitHub bookmark ID
+      const githubBookmark = App.data.groups
+        .flatMap(g => g.bookmarks)
+        .find(b => b.title === 'GitHub');
+
+      expect(bookmark.dataset.id).toBe(githubBookmark.id);
+    });
+
+    test('empty data shows empty state during search', () => {
+      App.data = { groups: [] };
+      Search.currentQuery = 'test';
+      Search.renderFiltered();
+
+      const container = document.getElementById('groups-container');
+      const emptyState = container.querySelector('.empty-state');
+      expect(emptyState).not.toBeNull();
+      expect(emptyState.textContent).toContain('No bookmark groups');
+    });
+  });
+});

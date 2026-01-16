@@ -1146,6 +1146,118 @@
       }
     };
 
+    // Search controller for filtering bookmarks
+    const Search = {
+      searchInput: null,
+      currentQuery: '',
+
+      init() {
+        this.searchInput = document.getElementById('search-input');
+        this.bindEvents();
+      },
+
+      bindEvents() {
+        if (!this.searchInput) return;
+
+        // Filter on input
+        this.searchInput.addEventListener('input', (e) => {
+          this.handleSearch(e.target.value);
+        });
+
+        // Clear search on Escape
+        this.searchInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') {
+            this.clear();
+          }
+        });
+      },
+
+      // Handle search input
+      handleSearch(query) {
+        this.currentQuery = query.toLowerCase().trim();
+        this.renderFiltered();
+      },
+
+      // Clear search and show all bookmarks
+      clear() {
+        this.currentQuery = '';
+        if (this.searchInput) {
+          this.searchInput.value = '';
+        }
+        Renderer.render(App.data);
+      },
+
+      // Filter bookmarks by search query
+      filterBookmarks(bookmarks, query) {
+        if (!query) return bookmarks;
+        return bookmarks.filter(bookmark =>
+          bookmark.title.toLowerCase().includes(query) ||
+          bookmark.url.toLowerCase().includes(query)
+        );
+      },
+
+      // Render filtered results
+      renderFiltered() {
+        const container = document.getElementById('groups-container');
+        if (!container) return;
+
+        // If no search query, render normally
+        if (!this.currentQuery) {
+          Renderer.render(App.data);
+          return;
+        }
+
+        container.innerHTML = '';
+
+        if (!App.data || !App.data.groups || App.data.groups.length === 0) {
+          const empty = document.createElement('div');
+          empty.className = 'empty-state';
+          empty.textContent = 'No bookmark groups yet. Click "+ Group" to create one.';
+          container.appendChild(empty);
+          return;
+        }
+
+        let totalMatches = 0;
+        const sortedGroups = [...App.data.groups].sort((a, b) => a.order - b.order);
+
+        sortedGroups.forEach(group => {
+          const filteredBookmarks = this.filterBookmarks(group.bookmarks, this.currentQuery);
+
+          // Only show groups that have matching bookmarks
+          if (filteredBookmarks.length === 0) return;
+
+          totalMatches += filteredBookmarks.length;
+
+          // Create a temporary group object with filtered bookmarks
+          const filteredGroup = {
+            ...group,
+            bookmarks: filteredBookmarks
+          };
+
+          container.appendChild(Renderer.createGroupElement(filteredGroup));
+        });
+
+        // Show no results message if nothing matches
+        if (totalMatches === 0) {
+          const noResults = document.createElement('div');
+          noResults.className = 'empty-state';
+          noResults.textContent = `No bookmarks found matching "${this.currentQuery}"`;
+          container.appendChild(noResults);
+        }
+      },
+
+      // Get count of matching bookmarks
+      getMatchCount() {
+        if (!this.currentQuery || !App.data || !App.data.groups) return 0;
+
+        let count = 0;
+        App.data.groups.forEach(group => {
+          count += this.filterBookmarks(group.bookmarks, this.currentQuery).length;
+        });
+        return count;
+      }
+    };
+
     // Drag and Drop controller for group reordering
     const GroupDragDrop = {
       draggedElement: null,
@@ -1290,6 +1402,7 @@
         GroupModal.init();
         DragDrop.init();
         GroupDragDrop.init();
+        Search.init();
         this.bindEvents();
         console.log('Bookmark app initialized with', this.data.groups.length, 'groups');
       },
@@ -1400,6 +1513,7 @@
       window.GroupModal = GroupModal;
       window.DragDrop = DragDrop;
       window.GroupDragDrop = GroupDragDrop;
+      window.Search = Search;
       window.App = App;
       window.STORAGE_KEY = STORAGE_KEY;
       window.SAMPLE_DATA = SAMPLE_DATA;

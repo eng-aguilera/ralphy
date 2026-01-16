@@ -430,3 +430,82 @@ Integration: drag and drop reorders groups (4 tests):
 - reordering updates DOM after re-render
 - all groups remain after reordering
 - bookmarks preserved during group reorder
+
+## Task 10: Add search/filter input that filters bookmarks across all groups as you type
+
+Completed: 2026-01-16
+
+### Changes:
+- Added Search controller to index.html with:
+  - `init()`: Initializes search input reference and binds event handlers
+  - `bindEvents()`: Sets up input event listener for real-time filtering and Escape key to clear
+  - `handleSearch(query)`: Processes search query (lowercases and trims whitespace)
+  - `clear()`: Clears search input and query, re-renders all bookmarks
+  - `filterBookmarks(bookmarks, query)`: Filters bookmarks by title or URL (case-insensitive)
+  - `renderFiltered()`: Renders only matching bookmarks, hides empty groups, shows "no results" message
+  - `getMatchCount()`: Returns count of matching bookmarks across all groups
+
+- Features implemented:
+  - Real-time filtering as user types in search input
+  - Case-insensitive matching against both bookmark titles and URLs
+  - Groups with no matching bookmarks are hidden during search
+  - "No bookmarks found matching..." message when no results
+  - Escape key clears search and restores all bookmarks
+  - Preserves group order when displaying filtered results
+  - Works correctly with empty data states
+
+- Updated App.init() to initialize Search
+- Exposed Search to window for testing
+
+### Test Results:
+- 272 tests passed (241 existing + 31 new)
+- Linting passed with no errors or warnings
+
+### New Tests Added:
+init (2 tests):
+- references searchInput element
+- exposes Search to window
+
+filterBookmarks (6 tests):
+- returns all bookmarks when query is empty
+- filters bookmarks by title match
+- filters bookmarks by URL match
+- returns empty array when no matches
+- matches are case insensitive for titles
+- matches are case insensitive for URLs
+
+handleSearch (3 tests):
+- sets currentQuery to lowercase
+- trims whitespace from query
+- calls renderFiltered after setting query
+
+clear (2 tests):
+- resets currentQuery to empty string
+- clears search input value
+
+renderFiltered (6 tests):
+- shows all groups when query is empty
+- hides groups with no matching bookmarks
+- shows "no results" message when nothing matches
+- displays matching bookmarks correctly
+- handles null data gracefully
+- handles empty groups array
+
+getMatchCount (4 tests):
+- returns 0 when query is empty
+- returns correct count for matching bookmarks
+- returns 0 when no matches
+- returns count across all groups
+
+event bindings (2 tests):
+- typing in search input triggers filtering
+- Escape key clears search
+
+Integration: search and render (3 tests):
+- filtering then clearing restores all bookmarks
+- filtered results have correct bookmark IDs
+- empty data shows empty state during search
+
+Additional integration tests (3 tests):
+- filters show multiple matching bookmarks
+- preserves group order when filtering

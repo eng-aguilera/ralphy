@@ -34,6 +34,6 @@ A minimal, fast local homepage for managing bookmarks with groups and sorting. A
 - [x] Implement delete bookmark and delete group with confirmation prompt
 - [x] Add drag-and-drop sorting for bookmarks within a group using native HTML5 drag API
 - [x] Add drag-and-drop reordering for groups themselves
-- [ ] Add search/filter input that filters bookmarks across all groups as you type
+- [x] Add search/filter input that filters bookmarks across all groups as you type
 - [ ] Add import/export buttons: export as JSON file download, import from JSON file upload
 - [ ] Style the page as a dark theme homepage with minimal aesthetic, add keyboard shortcut (/) to focus search
