@@ -244,3 +244,97 @@ Delete Bookmark (9 tests):
 Delete Group (13 tests):
 - deleteGroup: 10 tests (removes when confirmed, keeps when cancelled, saves to localStorage, updates DOM, shows confirmation for empty group, shows bookmark count, singular/plural bookmark text, ignores non-existent, deletes all bookmarks)
 - delete group button event delegation: 3 tests (triggers deleteGroup, prevents default, shows empty state when last group deleted)
+
+## Task 8: Add drag-and-drop sorting for bookmarks within a group using HTML5 drag API
+
+Completed: 2026-01-16
+
+### Changes:
+- Added CSS styles for drag-and-drop visual feedback:
+  - `.bookmark-item[draggable="true"]`: cursor: grab
+  - `.bookmark-item[draggable="true"]:active`: cursor: grabbing
+  - `.bookmark-item.dragging`: opacity: 0.5, background highlight
+  - `.bookmark-item.drag-over`: top border indicator for drop position
+  - `.bookmarks-list.drag-over-empty`: background highlight for empty lists
+
+- Modified `createBookmarkElement(bookmark, groupId)`:
+  - Added groupId parameter for tracking source group during drag
+  - Added `draggable="true"` attribute to bookmark elements
+  - Added `data-group-id` attribute to bookmark elements
+
+- Added DragDrop controller with:
+  - `init()`: Initializes drag-and-drop functionality
+  - `bindEvents()`: Sets up event delegation on groups-container for drag events
+  - `handleDragStart(e)`: Stores dragged element info, sets effectAllowed, adds dragging class
+  - `handleDragEnd(e)`: Clears state, removes all visual feedback classes
+  - `handleDragOver(e)`: Prevents default, shows drop position indicators
+  - `handleDragLeave(e)`: Removes hover indicators
+  - `handleDrop(e)`: Reorders bookmark in data model, saves to localStorage, re-renders
+  - `reorderBookmark(group, bookmark, newOrder)`: Updates orders of affected bookmarks
+  - `normalizeOrders(group)`: Ensures sequential order values (0, 1, 2, ...)
+
+- Features implemented:
+  - Drag bookmarks within a group to reorder
+  - Visual feedback during drag (opacity, cursor change)
+  - Drop position indicator (top border on target element)
+  - Order normalization ensures clean sequential values
+  - Persists reordered data to localStorage
+  - Re-renders after successful drop
+
+- Updated App.init() to initialize DragDrop
+- Exposed DragDrop to window for testing
+
+### Test Results:
+- 209 tests passed (174 existing + 35 new)
+- Linting passed with no errors
+
+### New Tests Added:
+Bookmark element drag attributes (3 tests):
+- draggable attribute set to true
+- data-group-id attribute present
+- data-id attribute present
+
+CSS drag styles (4 tests):
+- dragging class styles present
+- drag-over class styles present
+- cursor styles present
+- active grabbing cursor present
+
+DragDrop controller (4 tests):
+- init method exists
+- bindEvents method exists
+- handleDragStart method exists
+- state properties initialized correctly
+
+handleDragStart (4 tests):
+- sets dragging class on bookmark
+- stores dragged bookmark ID
+- stores source group ID
+- sets effectAllowed to move
+
+handleDragEnd (3 tests):
+- removes dragging class
+- clears draggedBookmarkId
+- clears sourceGroupId
+
+reorderBookmark (6 tests):
+- updates bookmark order to new position
+- shifts other bookmarks correctly when moving down
+- shifts other bookmarks correctly when moving up
+- handles moving to same position
+- handles moving to end of list
+- preserves other bookmark properties
+
+normalizeOrders (4 tests):
+- normalizes non-sequential orders to 0, 1, 2...
+- preserves relative order when normalizing
+- handles empty bookmarks array
+- handles single bookmark
+
+Integration: drag and drop reorders bookmarks (3 tests):
+- reordering persists to localStorage
+- reordering updates DOM after re-render
+- all bookmarks remain after reordering
+
+createBookmarkElement with groupId (1 test):
+- passes groupId to createBookmarkElement

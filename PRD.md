@@ -32,7 +32,7 @@ A minimal, fast local homepage for managing bookmarks with groups and sorting. A
 - [x] Add "New Group" functionality with inline name input, save to localStorage and re-render
 - [x] Implement edit bookmark: click to open modal pre-filled with current data, update on save
 - [x] Implement delete bookmark and delete group with confirmation prompt
-- [ ] Add drag-and-drop sorting for bookmarks within a group using native HTML5 drag API
+- [x] Add drag-and-drop sorting for bookmarks within a group using native HTML5 drag API
 - [ ] Add drag-and-drop reordering for groups themselves
 - [ ] Add search/filter input that filters bookmarks across all groups as you type
 - [ ] Add import/export buttons: export as JSON file download, import from JSON file upload

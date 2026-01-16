@@ -1862,3 +1862,414 @@ describe('Delete Group', () => {
     });
   });
 });
+
+describe('Drag and Drop Bookmark Sorting', () => {
+  let App;
+  let DragDrop;
+  let Renderer;
+  let Storage;
+  let STORAGE_KEY;
+
+  beforeEach(() => {
+    document.documentElement.innerHTML = html.replace(/<!DOCTYPE html>/i, '');
+
+    const script = document.querySelector('script');
+    eval(script.textContent);
+
+    App = window.App;
+    DragDrop = window.DragDrop;
+    Renderer = window.Renderer;
+    Storage = window.Storage;
+    STORAGE_KEY = window.STORAGE_KEY;
+    localStorage.clear();
+
+    // Initialize the app
+    App.init();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  describe('Bookmark element drag attributes', () => {
+    test('bookmark elements have draggable attribute', () => {
+      const bookmarks = document.querySelectorAll('.bookmark-item');
+      expect(bookmarks.length).toBeGreaterThan(0);
+      bookmarks.forEach(bookmark => {
+        expect(bookmark.draggable).toBe(true);
+      });
+    });
+
+    test('bookmark elements have data-group-id attribute', () => {
+      const bookmarks = document.querySelectorAll('.bookmark-item');
+      expect(bookmarks.length).toBeGreaterThan(0);
+      bookmarks.forEach(bookmark => {
+        expect(bookmark.dataset.groupId).toBeDefined();
+        expect(bookmark.dataset.groupId.length).toBeGreaterThan(0);
+      });
+    });
+
+    test('bookmark elements have data-id attribute', () => {
+      const bookmarks = document.querySelectorAll('.bookmark-item');
+      expect(bookmarks.length).toBeGreaterThan(0);
+      bookmarks.forEach(bookmark => {
+        expect(bookmark.dataset.id).toBeDefined();
+        expect(bookmark.dataset.id.length).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  describe('CSS drag styles', () => {
+    test('has dragging class styles in CSS', () => {
+      const style = document.querySelector('style');
+      expect(style.textContent).toContain('.bookmark-item.dragging');
+    });
+
+    test('has drag-over class styles in CSS', () => {
+      const style = document.querySelector('style');
+      expect(style.textContent).toContain('.bookmark-item.drag-over');
+    });
+
+    test('has cursor grab style for draggable items', () => {
+      const style = document.querySelector('style');
+      expect(style.textContent).toContain('cursor: grab');
+    });
+  });
+
+  describe('DragDrop controller initialization', () => {
+    test('DragDrop object exists', () => {
+      expect(DragDrop).toBeDefined();
+    });
+
+    test('DragDrop has init method', () => {
+      expect(typeof DragDrop.init).toBe('function');
+    });
+
+    test('DragDrop has handleDragStart method', () => {
+      expect(typeof DragDrop.handleDragStart).toBe('function');
+    });
+
+    test('DragDrop has handleDragEnd method', () => {
+      expect(typeof DragDrop.handleDragEnd).toBe('function');
+    });
+
+    test('DragDrop has handleDragOver method', () => {
+      expect(typeof DragDrop.handleDragOver).toBe('function');
+    });
+
+    test('DragDrop has handleDrop method', () => {
+      expect(typeof DragDrop.handleDrop).toBe('function');
+    });
+
+    test('DragDrop has reorderBookmark method', () => {
+      expect(typeof DragDrop.reorderBookmark).toBe('function');
+    });
+
+    test('DragDrop has normalizeOrders method', () => {
+      expect(typeof DragDrop.normalizeOrders).toBe('function');
+    });
+  });
+
+  describe('handleDragStart', () => {
+    test('sets dragging class on bookmark item', () => {
+      const bookmark = document.querySelector('.bookmark-item');
+      const event = new Event('dragstart', { bubbles: true });
+      event.dataTransfer = {
+        effectAllowed: '',
+        setData: () => {}
+      };
+
+      bookmark.dispatchEvent(event);
+
+      expect(bookmark.classList.contains('dragging')).toBe(true);
+    });
+
+    test('stores dragged bookmark ID', () => {
+      const bookmark = document.querySelector('.bookmark-item');
+      const bookmarkId = bookmark.dataset.id;
+      const event = new Event('dragstart', { bubbles: true });
+      event.dataTransfer = {
+        effectAllowed: '',
+        setData: () => {}
+      };
+
+      bookmark.dispatchEvent(event);
+
+      expect(DragDrop.draggedBookmarkId).toBe(bookmarkId);
+    });
+
+    test('stores source group ID', () => {
+      const bookmark = document.querySelector('.bookmark-item');
+      const groupId = bookmark.dataset.groupId;
+      const event = new Event('dragstart', { bubbles: true });
+      event.dataTransfer = {
+        effectAllowed: '',
+        setData: () => {}
+      };
+
+      bookmark.dispatchEvent(event);
+
+      expect(DragDrop.sourceGroupId).toBe(groupId);
+    });
+
+    test('sets dataTransfer effectAllowed to move', () => {
+      const bookmark = document.querySelector('.bookmark-item');
+      const event = new Event('dragstart', { bubbles: true });
+      event.dataTransfer = {
+        effectAllowed: '',
+        setData: () => {}
+      };
+
+      bookmark.dispatchEvent(event);
+
+      expect(event.dataTransfer.effectAllowed).toBe('move');
+    });
+
+    test('calls dataTransfer.setData with bookmark ID', () => {
+      const bookmark = document.querySelector('.bookmark-item');
+      const bookmarkId = bookmark.dataset.id;
+      const event = new Event('dragstart', { bubbles: true });
+      let setDataArgs = null;
+      event.dataTransfer = {
+        effectAllowed: '',
+        setData: (type, data) => { setDataArgs = { type, data }; }
+      };
+
+      bookmark.dispatchEvent(event);
+
+      expect(setDataArgs).toEqual({ type: 'text/plain', data: bookmarkId });
+    });
+  });
+
+  describe('handleDragEnd', () => {
+    test('removes dragging class from bookmark item', () => {
+      const bookmark = document.querySelector('.bookmark-item');
+      bookmark.classList.add('dragging');
+
+      const event = new Event('dragend', { bubbles: true });
+      bookmark.dispatchEvent(event);
+
+      expect(bookmark.classList.contains('dragging')).toBe(false);
+    });
+
+    test('clears draggedBookmarkId', () => {
+      const bookmark = document.querySelector('.bookmark-item');
+
+      // Start drag first
+      const startEvent = new Event('dragstart', { bubbles: true });
+      startEvent.dataTransfer = { effectAllowed: '', setData: () => {} };
+      bookmark.dispatchEvent(startEvent);
+
+      // End drag
+      const endEvent = new Event('dragend', { bubbles: true });
+      bookmark.dispatchEvent(endEvent);
+
+      expect(DragDrop.draggedBookmarkId).toBeNull();
+    });
+
+    test('clears sourceGroupId', () => {
+      const bookmark = document.querySelector('.bookmark-item');
+
+      // Start drag first
+      const startEvent = new Event('dragstart', { bubbles: true });
+      startEvent.dataTransfer = { effectAllowed: '', setData: () => {} };
+      bookmark.dispatchEvent(startEvent);
+
+      // End drag
+      const endEvent = new Event('dragend', { bubbles: true });
+      bookmark.dispatchEvent(endEvent);
+
+      expect(DragDrop.sourceGroupId).toBeNull();
+    });
+
+    test('removes drag-over classes from all elements', () => {
+      const bookmarks = document.querySelectorAll('.bookmark-item');
+      bookmarks.forEach(b => b.classList.add('drag-over'));
+
+      const event = new Event('dragend', { bubbles: true });
+      bookmarks[0].dispatchEvent(event);
+
+      document.querySelectorAll('.bookmark-item').forEach(b => {
+        expect(b.classList.contains('drag-over')).toBe(false);
+      });
+    });
+  });
+
+  describe('reorderBookmark', () => {
+    test('moves bookmark from position 2 to position 0', () => {
+      const group = App.data.groups[0]; // Development group with 3 bookmarks
+      const bookmark = group.bookmarks.find(b => b.order === 2);
+
+      DragDrop.reorderBookmark(group, bookmark, 0);
+
+      expect(bookmark.order).toBe(0);
+      // Verify orders are sequential
+      const orders = group.bookmarks.map(b => b.order).sort((a, b) => a - b);
+      expect(orders).toEqual([0, 1, 2]);
+    });
+
+    test('moves bookmark from position 0 to position 2', () => {
+      const group = App.data.groups[0];
+      const bookmark = group.bookmarks.find(b => b.order === 0);
+
+      DragDrop.reorderBookmark(group, bookmark, 2);
+
+      expect(bookmark.order).toBe(2);
+      // Verify orders are sequential
+      const orders = group.bookmarks.map(b => b.order).sort((a, b) => a - b);
+      expect(orders).toEqual([0, 1, 2]);
+    });
+
+    test('does nothing when moving to same position', () => {
+      const group = App.data.groups[0];
+      const bookmark = group.bookmarks.find(b => b.order === 1);
+      const originalOrders = group.bookmarks.map(b => ({ id: b.id, order: b.order }));
+
+      DragDrop.reorderBookmark(group, bookmark, 1);
+
+      group.bookmarks.forEach(b => {
+        const original = originalOrders.find(o => o.id === b.id);
+        expect(b.order).toBe(original.order);
+      });
+    });
+
+    test('moves bookmark from middle to end', () => {
+      const group = App.data.groups[0];
+      const bookmark = group.bookmarks.find(b => b.order === 1);
+
+      DragDrop.reorderBookmark(group, bookmark, 3);
+
+      // After normalization, should be at position 2 (0-indexed)
+      const sorted = [...group.bookmarks].sort((a, b) => a.order - b.order);
+      expect(sorted[2].id).toBe(bookmark.id);
+    });
+  });
+
+  describe('normalizeOrders', () => {
+    test('normalizes orders to sequential values starting from 0', () => {
+      const group = {
+        id: 'test-group',
+        name: 'Test',
+        order: 0,
+        bookmarks: [
+          { id: 'a', title: 'A', url: 'https://a.com', order: 5 },
+          { id: 'b', title: 'B', url: 'https://b.com', order: 2 },
+          { id: 'c', title: 'C', url: 'https://c.com', order: 10 }
+        ]
+      };
+
+      DragDrop.normalizeOrders(group);
+
+      const orders = group.bookmarks.map(b => b.order).sort((a, b) => a - b);
+      expect(orders).toEqual([0, 1, 2]);
+    });
+
+    test('preserves relative order when normalizing', () => {
+      const group = {
+        id: 'test-group',
+        name: 'Test',
+        order: 0,
+        bookmarks: [
+          { id: 'a', title: 'A', url: 'https://a.com', order: 10 },
+          { id: 'b', title: 'B', url: 'https://b.com', order: 5 },
+          { id: 'c', title: 'C', url: 'https://c.com', order: 15 }
+        ]
+      };
+
+      DragDrop.normalizeOrders(group);
+
+      const sorted = [...group.bookmarks].sort((a, b) => a.order - b.order);
+      expect(sorted[0].id).toBe('b'); // was 5, now 0
+      expect(sorted[1].id).toBe('a'); // was 10, now 1
+      expect(sorted[2].id).toBe('c'); // was 15, now 2
+    });
+
+    test('handles empty bookmarks array', () => {
+      const group = {
+        id: 'test-group',
+        name: 'Test',
+        order: 0,
+        bookmarks: []
+      };
+
+      expect(() => DragDrop.normalizeOrders(group)).not.toThrow();
+    });
+
+    test('handles single bookmark', () => {
+      const group = {
+        id: 'test-group',
+        name: 'Test',
+        order: 0,
+        bookmarks: [
+          { id: 'a', title: 'A', url: 'https://a.com', order: 5 }
+        ]
+      };
+
+      DragDrop.normalizeOrders(group);
+
+      expect(group.bookmarks[0].order).toBe(0);
+    });
+  });
+
+  describe('Integration: drag and drop reorders bookmarks', () => {
+    test('reordering persists to localStorage', () => {
+      const group = App.data.groups[0];
+      const bookmark = group.bookmarks.find(b => b.order === 2);
+
+      DragDrop.reorderBookmark(group, bookmark, 0);
+      Storage.saveData(App.data);
+
+      const storedData = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      const storedGroup = storedData.groups.find(g => g.id === group.id);
+      const storedBookmark = storedGroup.bookmarks.find(b => b.id === bookmark.id);
+      expect(storedBookmark.order).toBe(0);
+    });
+
+    test('reordering updates DOM after re-render', () => {
+      const group = App.data.groups[0];
+      const bookmarkToMove = group.bookmarks.find(b => b.order === 2);
+      const originalFirstBookmark = group.bookmarks.find(b => b.order === 0);
+
+      DragDrop.reorderBookmark(group, bookmarkToMove, 0);
+      Renderer.render(App.data);
+
+      const container = document.getElementById('groups-container');
+      const groupCard = container.querySelector(`[data-id="${group.id}"]`);
+      const renderedBookmarks = groupCard.querySelectorAll('.bookmark-item');
+
+      // First bookmark in DOM should now be the moved one
+      expect(renderedBookmarks[0].dataset.id).toBe(bookmarkToMove.id);
+      // Original first should now be second
+      expect(renderedBookmarks[1].dataset.id).toBe(originalFirstBookmark.id);
+    });
+
+    test('all bookmarks remain after reordering', () => {
+      const group = App.data.groups[0];
+      const originalCount = group.bookmarks.length;
+      const originalIds = group.bookmarks.map(b => b.id);
+      const bookmark = group.bookmarks.find(b => b.order === 1);
+
+      DragDrop.reorderBookmark(group, bookmark, 0);
+
+      expect(group.bookmarks.length).toBe(originalCount);
+      const newIds = group.bookmarks.map(b => b.id);
+      expect(newIds.sort()).toEqual(originalIds.sort());
+    });
+  });
+
+  describe('createBookmarkElement with groupId', () => {
+    test('passes groupId to createBookmarkElement', () => {
+      const testBookmark = {
+        id: 'test-bm',
+        title: 'Test',
+        url: 'https://test.com',
+        order: 0
+      };
+      const testGroupId = 'test-group-id';
+
+      const element = Renderer.createBookmarkElement(testBookmark, testGroupId);
+
+      expect(element.dataset.groupId).toBe(testGroupId);
+    });
+  });
+});

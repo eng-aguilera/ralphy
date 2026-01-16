@@ -213,6 +213,31 @@
       background-color: var(--bg-primary);
     }
 
+    /* Drag and drop styles */
+    .bookmark-item[draggable="true"] {
+      cursor: grab;
+    }
+
+    .bookmark-item[draggable="true"]:active {
+      cursor: grabbing;
+    }
+
+    .bookmark-item.dragging {
+      opacity: 0.5;
+      background-color: var(--bg-card);
+    }
+
+    .bookmark-item.drag-over {
+      border-top: 2px solid var(--accent);
+      margin-top: -2px;
+    }
+
+    .bookmarks-list.drag-over-empty {
+      background-color: rgba(233, 69, 96, 0.1);
+      border-radius: 4px;
+      min-height: 40px;
+    }
+
     .empty-state {
       color: var(--text-secondary);
       font-size: 0.875rem;
@@ -471,13 +496,15 @@
       },
 
       // Create a bookmark element
-      createBookmarkElement(bookmark) {
+      createBookmarkElement(bookmark, groupId) {
         const link = document.createElement('a');
         link.href = bookmark.url;
         link.className = 'bookmark-item';
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
         link.dataset.id = bookmark.id;
+        link.dataset.groupId = groupId;
+        link.draggable = true;
 
         const favicon = document.createElement('img');
         favicon.src = this.getFaviconUrl(bookmark.url);
@@ -554,7 +581,7 @@
         // Sort bookmarks by order and render
         const sortedBookmarks = [...group.bookmarks].sort((a, b) => a.order - b.order);
         sortedBookmarks.forEach(bookmark => {
-          bookmarksList.appendChild(this.createBookmarkElement(bookmark));
+          bookmarksList.appendChild(this.createBookmarkElement(bookmark, group.id));
         });
 
         // Show empty state if no bookmarks
@@ -926,6 +953,179 @@
       }
     };
 
+    // Drag and Drop controller for bookmark sorting
+    const DragDrop = {
+      draggedElement: null,
+      draggedBookmarkId: null,
+      sourceGroupId: null,
+
+      init() {
+        this.bindEvents();
+      },
+
+      bindEvents() {
+        const container = document.getElementById('groups-container');
+        if (!container) return;
+
+        container.addEventListener('dragstart', (e) => this.handleDragStart(e));
+        container.addEventListener('dragend', (e) => this.handleDragEnd(e));
+        container.addEventListener('dragover', (e) => this.handleDragOver(e));
+        container.addEventListener('dragleave', (e) => this.handleDragLeave(e));
+        container.addEventListener('drop', (e) => this.handleDrop(e));
+      },
+
+      handleDragStart(e) {
+        const bookmarkItem = e.target.closest('.bookmark-item');
+        if (!bookmarkItem || !bookmarkItem.draggable) return;
+
+        this.draggedElement = bookmarkItem;
+        this.draggedBookmarkId = bookmarkItem.dataset.id;
+        this.sourceGroupId = bookmarkItem.dataset.groupId;
+
+        bookmarkItem.classList.add('dragging');
+
+        // Set drag data
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', this.draggedBookmarkId);
+      },
+
+      handleDragEnd(e) {
+        const bookmarkItem = e.target.closest('.bookmark-item');
+        if (bookmarkItem) {
+          bookmarkItem.classList.remove('dragging');
+        }
+
+        // Remove all drag-over classes
+        document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+        document.querySelectorAll('.drag-over-empty').forEach(el => el.classList.remove('drag-over-empty'));
+
+        this.draggedElement = null;
+        this.draggedBookmarkId = null;
+        this.sourceGroupId = null;
+      },
+
+      handleDragOver(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+
+        const bookmarkItem = e.target.closest('.bookmark-item');
+        const bookmarksList = e.target.closest('.bookmarks-list');
+
+        // Remove previous drag-over indicators
+        document.querySelectorAll('.drag-over').forEach(el => {
+          if (el !== bookmarkItem) el.classList.remove('drag-over');
+        });
+        document.querySelectorAll('.drag-over-empty').forEach(el => {
+          if (el !== bookmarksList) el.classList.remove('drag-over-empty');
+        });
+
+        if (bookmarkItem && bookmarkItem !== this.draggedElement) {
+          bookmarkItem.classList.add('drag-over');
+        } else if (bookmarksList && !bookmarkItem) {
+          // Dragging over empty area in bookmarks list
+          bookmarksList.classList.add('drag-over-empty');
+        }
+      },
+
+      handleDragLeave(e) {
+        const bookmarkItem = e.target.closest('.bookmark-item');
+        const bookmarksList = e.target.closest('.bookmarks-list');
+
+        if (bookmarkItem) {
+          bookmarkItem.classList.remove('drag-over');
+        }
+        if (bookmarksList && !e.relatedTarget?.closest('.bookmarks-list')) {
+          bookmarksList.classList.remove('drag-over-empty');
+        }
+      },
+
+      handleDrop(e) {
+        e.preventDefault();
+
+        if (!this.draggedBookmarkId) return;
+
+        const bookmarkItem = e.target.closest('.bookmark-item');
+        const bookmarksList = e.target.closest('.bookmarks-list');
+        const groupCard = e.target.closest('.group-card');
+
+        if (!groupCard) return;
+
+        const targetGroupId = groupCard.dataset.id;
+        const targetGroup = App.data.groups.find(g => g.id === targetGroupId);
+        const sourceGroup = App.data.groups.find(g => g.id === this.sourceGroupId);
+
+        if (!targetGroup || !sourceGroup) return;
+
+        // Only allow sorting within the same group for this task
+        if (targetGroupId !== this.sourceGroupId) return;
+
+        // Find the dragged bookmark
+        const draggedBookmark = sourceGroup.bookmarks.find(b => b.id === this.draggedBookmarkId);
+        if (!draggedBookmark) return;
+
+        let newOrder;
+        if (bookmarkItem && bookmarkItem !== this.draggedElement) {
+          // Dropped on another bookmark - insert before it
+          const targetBookmarkId = bookmarkItem.dataset.id;
+          const targetBookmark = targetGroup.bookmarks.find(b => b.id === targetBookmarkId);
+          if (!targetBookmark) return;
+
+          newOrder = targetBookmark.order;
+        } else if (bookmarksList) {
+          // Dropped on empty area - move to end
+          const maxOrder = targetGroup.bookmarks.length > 0
+            ? Math.max(...targetGroup.bookmarks.map(b => b.order))
+            : -1;
+          newOrder = maxOrder + 1;
+        } else {
+          return;
+        }
+
+        // Reorder bookmarks
+        this.reorderBookmark(targetGroup, draggedBookmark, newOrder);
+
+        // Save and re-render
+        Storage.saveData(App.data);
+        Renderer.render(App.data);
+      },
+
+      reorderBookmark(group, bookmark, newOrder) {
+        const oldOrder = bookmark.order;
+
+        if (oldOrder === newOrder) return;
+
+        // Update orders of other bookmarks
+        if (newOrder < oldOrder) {
+          // Moving up: increment orders of bookmarks between newOrder and oldOrder
+          group.bookmarks.forEach(b => {
+            if (b.id !== bookmark.id && b.order >= newOrder && b.order < oldOrder) {
+              b.order++;
+            }
+          });
+        } else {
+          // Moving down: decrement orders of bookmarks between oldOrder and newOrder
+          group.bookmarks.forEach(b => {
+            if (b.id !== bookmark.id && b.order > oldOrder && b.order <= newOrder) {
+              b.order--;
+            }
+          });
+        }
+
+        // Set the new order for the dragged bookmark
+        bookmark.order = newOrder;
+
+        // Normalize orders to be sequential (0, 1, 2, ...)
+        this.normalizeOrders(group);
+      },
+
+      normalizeOrders(group) {
+        const sorted = [...group.bookmarks].sort((a, b) => a.order - b.order);
+        sorted.forEach((bookmark, index) => {
+          bookmark.order = index;
+        });
+      }
+    };
+
     // App object
     const App = {
       data: null,
@@ -935,6 +1135,7 @@
         Renderer.render(this.data);
         BookmarkModal.init();
         GroupModal.init();
+        DragDrop.init();
         this.bindEvents();
         console.log('Bookmark app initialized with', this.data.groups.length, 'groups');
       },
@@ -1043,6 +1244,7 @@
       window.Renderer = Renderer;
       window.BookmarkModal = BookmarkModal;
       window.GroupModal = GroupModal;
+      window.DragDrop = DragDrop;
       window.App = App;
       window.STORAGE_KEY = STORAGE_KEY;
       window.SAMPLE_DATA = SAMPLE_DATA;
