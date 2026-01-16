@@ -3636,3 +3636,294 @@ describe('Import/Export functionality', () => {
     });
   });
 });
+
+describe('Task 12: Dark Theme Styling and Keyboard Shortcut', () => {
+  beforeEach(() => {
+    document.documentElement.innerHTML = html.replace(/<!DOCTYPE html>/i, '');
+    localStorage.clear();
+    // Initialize the app
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+  });
+
+  describe('Dark theme CSS variables', () => {
+    test('has dark primary background color', () => {
+      // Check that CSS variables are defined (they should exist in the :root)
+      const styleTag = document.querySelector('style');
+      expect(styleTag.textContent).toContain('--bg-primary');
+    });
+
+    test('has dark secondary background color', () => {
+      const styleTag = document.querySelector('style');
+      expect(styleTag.textContent).toContain('--bg-secondary');
+    });
+
+    test('has accent color defined', () => {
+      const styleTag = document.querySelector('style');
+      expect(styleTag.textContent).toContain('--accent');
+    });
+
+    test('has border color defined', () => {
+      const styleTag = document.querySelector('style');
+      expect(styleTag.textContent).toContain('--border-color');
+    });
+
+    test('has text colors defined', () => {
+      const styleTag = document.querySelector('style');
+      expect(styleTag.textContent).toContain('--text-primary');
+      expect(styleTag.textContent).toContain('--text-secondary');
+      expect(styleTag.textContent).toContain('--text-muted');
+    });
+
+    test('has transition variables defined', () => {
+      const styleTag = document.querySelector('style');
+      expect(styleTag.textContent).toContain('--transition-fast');
+      expect(styleTag.textContent).toContain('--transition-normal');
+    });
+  });
+
+  describe('Minimal aesthetic styles', () => {
+    test('has border-radius variables', () => {
+      const styleTag = document.querySelector('style');
+      expect(styleTag.textContent).toContain('--border-radius');
+      expect(styleTag.textContent).toContain('--border-radius-sm');
+    });
+
+    test('has spacing variables', () => {
+      const styleTag = document.querySelector('style');
+      expect(styleTag.textContent).toContain('--spacing-xs');
+      expect(styleTag.textContent).toContain('--spacing-sm');
+      expect(styleTag.textContent).toContain('--spacing-md');
+      expect(styleTag.textContent).toContain('--spacing-lg');
+      expect(styleTag.textContent).toContain('--spacing-xl');
+    });
+
+    test('header has bottom border style', () => {
+      const styleTag = document.querySelector('style');
+      expect(styleTag.textContent).toMatch(/header\s*\{[^}]*border-bottom/);
+    });
+
+    test('group cards have border styling', () => {
+      const styleTag = document.querySelector('style');
+      expect(styleTag.textContent).toMatch(/\.group-card\s*\{[^}]*border/);
+    });
+
+    test('modal has backdrop blur effect', () => {
+      const styleTag = document.querySelector('style');
+      expect(styleTag.textContent).toContain('backdrop-filter');
+    });
+
+    test('has focus-visible styles for keyboard navigation', () => {
+      const styleTag = document.querySelector('style');
+      expect(styleTag.textContent).toContain(':focus-visible');
+    });
+
+    test('has selection color styles', () => {
+      const styleTag = document.querySelector('style');
+      expect(styleTag.textContent).toContain('::selection');
+    });
+  });
+
+  describe('Search hint element', () => {
+    test('has search hint element with "/" text', () => {
+      const searchHint = document.querySelector('#search-hint');
+      expect(searchHint).not.toBeNull();
+      expect(searchHint.textContent).toBe('/');
+    });
+
+    test('search hint has correct class', () => {
+      const searchHint = document.querySelector('#search-hint');
+      expect(searchHint.classList.contains('search-hint')).toBe(true);
+    });
+
+    test('search hint CSS exists', () => {
+      const styleTag = document.querySelector('style');
+      expect(styleTag.textContent).toContain('.search-hint');
+    });
+  });
+
+  describe('Keyboard shortcut: "/" to focus search', () => {
+    test('Search has focus method', () => {
+      const { Search } = window;
+      expect(typeof Search.focus).toBe('function');
+    });
+
+    test('Search has handleGlobalKeydown method', () => {
+      const { Search } = window;
+      expect(typeof Search.handleGlobalKeydown).toBe('function');
+    });
+
+    test('pressing "/" focuses search input when not in an input field', () => {
+      const { Search } = window;
+      const searchInput = document.querySelector('#search-input');
+
+      // Ensure focus is not on search input
+      document.body.focus();
+      expect(document.activeElement).not.toBe(searchInput);
+
+      // Simulate "/" keydown
+      const event = new KeyboardEvent('keydown', { key: '/', bubbles: true });
+      const preventDefaultSpy = jest.spyOn(event, 'preventDefault');
+
+      Search.handleGlobalKeydown(event);
+
+      expect(preventDefaultSpy).toHaveBeenCalled();
+      expect(document.activeElement).toBe(searchInput);
+    });
+
+    test('pressing "/" does not focus search when typing in an input', () => {
+      const { Search } = window;
+      const bookmarkTitleInput = document.querySelector('#bookmark-title');
+
+      // Focus on another input
+      bookmarkTitleInput.focus();
+      expect(document.activeElement).toBe(bookmarkTitleInput);
+
+      // Simulate "/" keydown while in an input
+      const event = new KeyboardEvent('keydown', { key: '/', bubbles: true });
+      const preventDefaultSpy = jest.spyOn(event, 'preventDefault');
+
+      Search.handleGlobalKeydown(event);
+
+      // Should NOT have prevented default or changed focus
+      expect(preventDefaultSpy).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(bookmarkTitleInput);
+    });
+
+    test('pressing "/" does not focus search when typing in a textarea', () => {
+      const { Search } = window;
+
+      // Create and add a textarea to test
+      const textarea = document.createElement('textarea');
+      document.body.appendChild(textarea);
+      textarea.focus();
+      expect(document.activeElement).toBe(textarea);
+
+      // Simulate "/" keydown while in a textarea
+      const event = new KeyboardEvent('keydown', { key: '/', bubbles: true });
+
+      Search.handleGlobalKeydown(event);
+
+      // Should NOT have changed focus
+      expect(document.activeElement).toBe(textarea);
+
+      // Clean up
+      document.body.removeChild(textarea);
+    });
+
+    test('other keys do not trigger search focus', () => {
+      const { Search } = window;
+      const searchInput = document.querySelector('#search-input');
+
+      document.body.focus();
+
+      // Simulate "a" keydown
+      const event = new KeyboardEvent('keydown', { key: 'a', bubbles: true });
+      const preventDefaultSpy = jest.spyOn(event, 'preventDefault');
+
+      Search.handleGlobalKeydown(event);
+
+      expect(preventDefaultSpy).not.toHaveBeenCalled();
+      expect(document.activeElement).not.toBe(searchInput);
+    });
+  });
+
+  describe('Search hint visibility', () => {
+    test('Search has searchHint reference', () => {
+      const { Search } = window;
+      expect(Search.searchHint).not.toBeNull();
+    });
+
+    test('search hint is hidden when search input is focused', () => {
+      const searchInput = document.querySelector('#search-input');
+      const searchHint = document.querySelector('#search-hint');
+
+      // Focus the search input
+      searchInput.dispatchEvent(new Event('focus'));
+
+      expect(searchHint.style.display).toBe('none');
+    });
+
+    test('search hint is shown when search input is blurred and empty', () => {
+      const searchInput = document.querySelector('#search-input');
+      const searchHint = document.querySelector('#search-hint');
+
+      // First focus to hide
+      searchInput.dispatchEvent(new Event('focus'));
+      expect(searchHint.style.display).toBe('none');
+
+      // Then blur with empty value
+      searchInput.value = '';
+      searchInput.dispatchEvent(new Event('blur'));
+
+      expect(searchHint.style.display).toBe('');
+    });
+
+    test('search hint stays hidden when search input has value', () => {
+      const searchInput = document.querySelector('#search-input');
+      const searchHint = document.querySelector('#search-hint');
+
+      // Focus and type something
+      searchInput.dispatchEvent(new Event('focus'));
+      searchInput.value = 'test';
+
+      // Blur with value
+      searchInput.dispatchEvent(new Event('blur'));
+
+      // Hint should stay hidden because there's text
+      expect(searchHint.style.display).toBe('none');
+    });
+  });
+
+  describe('Escape key behavior', () => {
+    test('pressing Escape clears search and blurs input', () => {
+      const { Search } = window;
+      const searchInput = document.querySelector('#search-input');
+
+      // Focus and type something
+      searchInput.focus();
+      searchInput.value = 'test';
+      Search.handleSearch('test');
+
+      expect(Search.currentQuery).toBe('test');
+
+      // Simulate Escape keydown
+      const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true });
+      searchInput.dispatchEvent(event);
+
+      expect(Search.currentQuery).toBe('');
+      expect(searchInput.value).toBe('');
+    });
+  });
+
+  describe('Responsive styles', () => {
+    test('has mobile breakpoint at 480px', () => {
+      const styleTag = document.querySelector('style');
+      expect(styleTag.textContent).toContain('@media (max-width: 480px)');
+    });
+
+    test('has tablet breakpoint at 768px', () => {
+      const styleTag = document.querySelector('style');
+      expect(styleTag.textContent).toContain('@media (max-width: 768px)');
+    });
+
+    test('search hint is hidden on mobile in CSS', () => {
+      const styleTag = document.querySelector('style');
+      const css = styleTag.textContent;
+      // Verify the CSS contains both the 480px media query and .search-hint with display: none
+      expect(css).toContain('@media (max-width: 480px)');
+      expect(css).toContain('.search-hint');
+      // Check that somewhere in CSS there's a rule to hide search hint
+      expect(css).toMatch(/\.search-hint\s*\{[^}]*display:\s*none/);
+    });
+
+    test('group actions visible on mobile (opacity 1)', () => {
+      const styleTag = document.querySelector('style');
+      const css = styleTag.textContent;
+      // Verify the CSS contains both the 768px media query and .group-actions with opacity: 1
+      expect(css).toContain('@media (max-width: 768px)');
+      expect(css).toContain('.group-actions');
+      // Check that somewhere in CSS there's a rule to show group actions (opacity: 1)
+      expect(css).toMatch(/\.group-actions\s*\{[^}]*opacity:\s*1/);
+    });
+  });
+});

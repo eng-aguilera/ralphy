@@ -618,3 +618,92 @@ singular/plural in confirmation message (4 tests):
 - uses plural "groups" for multiple groups
 - uses singular "bookmark" for 1 bookmark
 - uses plural "bookmarks" for multiple bookmarks
+
+## Task 12: Style the page as a dark theme homepage with minimal aesthetic, add keyboard shortcut (/) to focus search
+
+Completed: 2026-01-16
+
+### Changes:
+- Enhanced CSS styling for a minimal dark theme aesthetic:
+  - Updated color palette with darker, more neutral colors (--bg-primary: #0d0d0d, etc.)
+  - Added new CSS variables: --bg-hover, --text-muted, --border-color, --accent-hover
+  - Added transition variables: --transition-fast (150ms), --transition-normal (200ms)
+  - Added --spacing-xs and --spacing-xl for finer spacing control
+  - Added --border-radius-sm for smaller border radius option
+
+- Refined UI components:
+  - Header: Added bottom border separator, improved spacing
+  - Buttons: Refined styling with borders, better hover states, focus styles
+  - Group cards: Added border, hover effect, uppercase group titles, hidden actions that appear on hover
+  - Bookmark items: Improved spacing, transitions, icon styling
+  - Modals: Added backdrop blur effect, shadow, better visual hierarchy
+  - Search input: Added padding for hint, improved focus state
+
+- Added keyboard shortcut functionality:
+  - "/" key focuses the search input when not typing in another input/textarea
+  - Added visual hint element showing "/" next to search input
+  - Hint hides when search is focused, shows when blurred with empty value
+  - Escape key now also blurs the search input in addition to clearing it
+
+- Added responsive improvements:
+  - Group actions always visible on mobile (768px breakpoint)
+  - Search hint hidden on mobile (480px breakpoint)
+  - Added :focus-visible styles for keyboard navigation accessibility
+  - Added ::selection color styling
+
+- Updated Search controller:
+  - Added searchHint reference
+  - Added focus() method
+  - Added handleGlobalKeydown() method for "/" shortcut
+  - Added focus/blur event handlers to toggle search hint visibility
+  - Enhanced Escape key handler to also blur the input
+
+### Test Results:
+- 352 tests passed (321 existing + 31 new)
+- Linting passed with no errors or warnings
+
+### New Tests Added:
+Dark theme CSS variables (6 tests):
+- has dark primary background color
+- has dark secondary background color
+- has accent color defined
+- has border color defined
+- has text colors defined
+- has transition variables defined
+
+Minimal aesthetic styles (7 tests):
+- has border-radius variables
+- has spacing variables
+- header has bottom border style
+- group cards have border styling
+- modal has backdrop blur effect
+- has focus-visible styles for keyboard navigation
+- has selection color styles
+
+Search hint element (3 tests):
+- has search hint element with "/" text
+- search hint has correct class
+- search hint CSS exists
+
+Keyboard shortcut: "/" to focus search (5 tests):
+- Search has focus method
+- Search has handleGlobalKeydown method
+- pressing "/" focuses search input when not in an input field
+- pressing "/" does not focus search when typing in an input
+- pressing "/" does not focus search when typing in a textarea
+- other keys do not trigger search focus
+
+Search hint visibility (4 tests):
+- Search has searchHint reference
+- search hint is hidden when search input is focused
+- search hint is shown when search input is blurred and empty
+- search hint stays hidden when search input has value
+
+Escape key behavior (1 test):
+- pressing Escape clears search and blurs input
+
+Responsive styles (4 tests):
+- has mobile breakpoint at 480px
+- has tablet breakpoint at 768px
+- search hint is hidden on mobile in CSS
+- group actions visible on mobile (opacity 1)

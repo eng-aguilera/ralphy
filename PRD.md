@@ -36,4 +36,4 @@ A minimal, fast local homepage for managing bookmarks with groups and sorting. A
 - [x] Add drag-and-drop reordering for groups themselves
 - [x] Add search/filter input that filters bookmarks across all groups as you type
 - [x] Add import/export buttons: export as JSON file download, import from JSON file upload
-- [ ] Style the page as a dark theme homepage with minimal aesthetic, add keyboard shortcut (/) to focus search
+- [x] Style the page as a dark theme homepage with minimal aesthetic, add keyboard shortcut (/) to focus search

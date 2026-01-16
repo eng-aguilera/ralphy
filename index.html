@@ -6,16 +6,25 @@
   <title>Bookmarks</title>
   <style>
     :root {
-      --bg-primary: #1a1a2e;
-      --bg-secondary: #16213e;
-      --bg-card: #0f3460;
-      --text-primary: #eaeaea;
-      --text-secondary: #a0a0a0;
-      --accent: #e94560;
-      --border-radius: 8px;
+      --bg-primary: #0d0d0d;
+      --bg-secondary: #161616;
+      --bg-card: #1f1f1f;
+      --bg-hover: #2a2a2a;
+      --text-primary: #e5e5e5;
+      --text-secondary: #737373;
+      --text-muted: #525252;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --border-color: #262626;
+      --border-radius: 12px;
+      --border-radius-sm: 8px;
+      --spacing-xs: 4px;
       --spacing-sm: 8px;
       --spacing-md: 16px;
       --spacing-lg: 24px;
+      --spacing-xl: 32px;
+      --transition-fast: 150ms ease;
+      --transition-normal: 200ms ease;
     }
 
     * {
@@ -25,15 +34,16 @@
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif;
       background-color: var(--bg-primary);
       color: var(--text-primary);
       min-height: 100vh;
-      padding: var(--spacing-lg);
+      padding: var(--spacing-xl);
+      line-height: 1.5;
     }
 
     .container {
-      max-width: 1400px;
+      max-width: 1200px;
       margin: 0 auto;
     }
 
@@ -41,20 +51,25 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: var(--spacing-lg);
+      margin-bottom: var(--spacing-xl);
       flex-wrap: wrap;
       gap: var(--spacing-md);
+      padding-bottom: var(--spacing-lg);
+      border-bottom: 1px solid var(--border-color);
     }
 
     h1 {
-      font-size: 1.5rem;
-      font-weight: 600;
+      font-size: 1.25rem;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
     }
 
     .header-actions {
       display: flex;
       gap: var(--spacing-sm);
       flex-wrap: wrap;
+      align-items: center;
     }
 
     .search-container {
@@ -63,58 +78,93 @@
 
     #search-input {
       background-color: var(--bg-secondary);
-      border: 1px solid var(--bg-card);
-      border-radius: var(--border-radius);
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius-sm);
       padding: var(--spacing-sm) var(--spacing-md);
+      padding-right: 40px;
       color: var(--text-primary);
       font-size: 0.875rem;
-      width: 200px;
-      transition: border-color 0.2s;
+      width: 220px;
+      transition: border-color var(--transition-fast), background-color var(--transition-fast);
     }
 
     #search-input:focus {
       outline: none;
       border-color: var(--accent);
+      background-color: var(--bg-card);
     }
 
     #search-input::placeholder {
-      color: var(--text-secondary);
+      color: var(--text-muted);
+    }
+
+    .search-hint {
+      position: absolute;
+      right: var(--spacing-sm);
+      top: 50%;
+      transform: translateY(-50%);
+      background-color: var(--bg-card);
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      pointer-events: none;
+      font-family: monospace;
+      border: 1px solid var(--border-color);
     }
 
     .btn {
       background-color: var(--bg-card);
-      border: none;
-      border-radius: var(--border-radius);
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius-sm);
       padding: var(--spacing-sm) var(--spacing-md);
-      color: var(--text-primary);
-      font-size: 0.875rem;
+      color: var(--text-secondary);
+      font-size: 0.8125rem;
+      font-weight: 500;
       cursor: pointer;
-      transition: background-color 0.2s;
+      transition: all var(--transition-fast);
     }
 
     .btn:hover {
-      background-color: var(--accent);
+      background-color: var(--bg-hover);
+      color: var(--text-primary);
+      border-color: var(--text-muted);
+    }
+
+    .btn:focus {
+      outline: none;
+      border-color: var(--accent);
     }
 
     .btn-primary {
       background-color: var(--accent);
+      border-color: var(--accent);
+      color: white;
     }
 
     .btn-primary:hover {
-      background-color: #d63850;
+      background-color: var(--accent-hover);
+      border-color: var(--accent-hover);
+      color: white;
     }
 
     .groups-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
       gap: var(--spacing-lg);
     }
 
     .group-card {
       background-color: var(--bg-secondary);
+      border: 1px solid var(--border-color);
       border-radius: var(--border-radius);
       padding: var(--spacing-md);
-      min-height: 150px;
+      min-height: 120px;
+      transition: border-color var(--transition-fast);
+    }
+
+    .group-card:hover {
+      border-color: var(--text-muted);
     }
 
     .group-header {
@@ -123,28 +173,37 @@
       align-items: center;
       margin-bottom: var(--spacing-md);
       padding-bottom: var(--spacing-sm);
-      border-bottom: 1px solid var(--bg-card);
+      border-bottom: 1px solid var(--border-color);
     }
 
     .group-title {
-      font-size: 1rem;
+      font-size: 0.875rem;
       font-weight: 500;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
 
     .group-actions {
       display: flex;
       gap: 4px;
+      opacity: 0;
+      transition: opacity var(--transition-fast);
+    }
+
+    .group-card:hover .group-actions {
+      opacity: 1;
     }
 
     .group-actions button {
       background: none;
       border: none;
-      color: var(--text-secondary);
+      color: var(--text-muted);
       cursor: pointer;
-      padding: 4px;
+      padding: 4px 6px;
       font-size: 0.75rem;
       border-radius: 4px;
-      transition: color 0.2s, background-color 0.2s;
+      transition: color var(--transition-fast), background-color var(--transition-fast);
     }
 
     .group-actions button:hover {
@@ -155,18 +214,18 @@
     .bookmarks-list {
       display: flex;
       flex-direction: column;
-      gap: var(--spacing-sm);
+      gap: var(--spacing-xs);
     }
 
     .bookmark-item {
       display: flex;
       align-items: center;
       gap: var(--spacing-sm);
-      padding: var(--spacing-sm);
-      border-radius: 4px;
+      padding: var(--spacing-sm) var(--spacing-sm);
+      border-radius: var(--border-radius-sm);
       text-decoration: none;
       color: var(--text-primary);
-      transition: background-color 0.2s;
+      transition: background-color var(--transition-fast);
     }
 
     .bookmark-item:hover {
@@ -177,6 +236,8 @@
       width: 16px;
       height: 16px;
       flex-shrink: 0;
+      border-radius: 2px;
+      opacity: 0.9;
     }
 
     .bookmark-title {
@@ -184,6 +245,7 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      font-weight: 400;
     }
 
     .bookmark-actions {
@@ -191,7 +253,7 @@
       display: flex;
       gap: 4px;
       opacity: 0;
-      transition: opacity 0.2s;
+      transition: opacity var(--transition-fast);
     }
 
     .bookmark-item:hover .bookmark-actions {
@@ -201,16 +263,17 @@
     .bookmark-actions button {
       background: none;
       border: none;
-      color: var(--text-secondary);
+      color: var(--text-muted);
       cursor: pointer;
-      padding: 2px 4px;
+      padding: 2px 6px;
       font-size: 0.7rem;
       border-radius: 4px;
+      transition: color var(--transition-fast), background-color var(--transition-fast);
     }
 
     .bookmark-actions button:hover {
       color: var(--text-primary);
-      background-color: var(--bg-primary);
+      background-color: var(--bg-hover);
     }
 
     /* Drag and drop styles */
@@ -223,7 +286,7 @@
     }
 
     .bookmark-item.dragging {
-      opacity: 0.5;
+      opacity: 0.4;
       background-color: var(--bg-card);
     }
 
@@ -233,8 +296,8 @@
     }
 
     .bookmarks-list.drag-over-empty {
-      background-color: rgba(233, 69, 96, 0.1);
-      border-radius: 4px;
+      background-color: rgba(59, 130, 246, 0.1);
+      border-radius: var(--border-radius-sm);
       min-height: 40px;
     }
 
@@ -248,7 +311,7 @@
     }
 
     .group-card.dragging {
-      opacity: 0.5;
+      opacity: 0.4;
       background-color: var(--bg-card);
     }
 
@@ -258,10 +321,10 @@
     }
 
     .empty-state {
-      color: var(--text-secondary);
+      color: var(--text-muted);
       font-size: 0.875rem;
       text-align: center;
-      padding: var(--spacing-lg);
+      padding: var(--spacing-xl);
     }
 
     /* Modal styles */
@@ -271,7 +334,8 @@
       left: 0;
       right: 0;
       bottom: 0;
-      background-color: rgba(0, 0, 0, 0.7);
+      background-color: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(4px);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -285,15 +349,19 @@
 
     .modal {
       background-color: var(--bg-secondary);
+      border: 1px solid var(--border-color);
       border-radius: var(--border-radius);
       padding: var(--spacing-lg);
       width: 90%;
       max-width: 400px;
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
     }
 
     .modal h2 {
-      font-size: 1.125rem;
-      margin-bottom: var(--spacing-md);
+      font-size: 1rem;
+      font-weight: 500;
+      margin-bottom: var(--spacing-lg);
+      color: var(--text-primary);
     }
 
     .form-group {
@@ -302,20 +370,22 @@
 
     .form-group label {
       display: block;
-      font-size: 0.875rem;
+      font-size: 0.8125rem;
       margin-bottom: var(--spacing-sm);
       color: var(--text-secondary);
+      font-weight: 500;
     }
 
     .form-group input,
     .form-group select {
       width: 100%;
       background-color: var(--bg-primary);
-      border: 1px solid var(--bg-card);
-      border-radius: var(--border-radius);
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius-sm);
       padding: var(--spacing-sm) var(--spacing-md);
       color: var(--text-primary);
       font-size: 0.875rem;
+      transition: border-color var(--transition-fast);
     }
 
     .form-group input:focus,
@@ -324,11 +394,17 @@
       border-color: var(--accent);
     }
 
+    .form-group input::placeholder {
+      color: var(--text-muted);
+    }
+
     .modal-actions {
       display: flex;
       justify-content: flex-end;
       gap: var(--spacing-sm);
       margin-top: var(--spacing-lg);
+      padding-top: var(--spacing-md);
+      border-top: 1px solid var(--border-color);
     }
 
     /* Responsive adjustments */
@@ -354,6 +430,10 @@
       .groups-grid {
         grid-template-columns: 1fr;
       }
+
+      .group-actions {
+        opacity: 1;
+      }
     }
 
     @media (max-width: 480px) {
@@ -365,6 +445,23 @@
         width: 100%;
         text-align: center;
       }
+
+      .search-hint {
+        display: none;
+      }
+    }
+
+    /* Focus visible for keyboard navigation */
+    .btn:focus-visible,
+    .bookmark-item:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    /* Selection color */
+    ::selection {
+      background-color: var(--accent);
+      color: white;
     }
   </style>
 </head>
@@ -374,7 +471,8 @@
       <h1>Bookmarks</h1>
       <div class="header-actions">
         <div class="search-container">
-          <input type="text" id="search-input" placeholder="Search bookmarks... (/)" aria-label="Search bookmarks">
+          <input type="text" id="search-input" placeholder="Search bookmarks..." aria-label="Search bookmarks">
+          <span class="search-hint" id="search-hint">/</span>
         </div>
         <button class="btn" id="export-btn">Export</button>
         <button class="btn" id="import-btn">Import</button>
@@ -1152,10 +1250,12 @@
     // Search controller for filtering bookmarks
     const Search = {
       searchInput: null,
+      searchHint: null,
       currentQuery: '',
 
       init() {
         this.searchInput = document.getElementById('search-input');
+        this.searchHint = document.getElementById('search-hint');
         this.bindEvents();
       },
 
@@ -1171,8 +1271,51 @@
         this.searchInput.addEventListener('keydown', (e) => {
           if (e.key === 'Escape') {
             this.clear();
+            this.searchInput.blur();
           }
         });
+
+        // Hide search hint when focused, show when blurred
+        this.searchInput.addEventListener('focus', () => {
+          if (this.searchHint) {
+            this.searchHint.style.display = 'none';
+          }
+        });
+
+        this.searchInput.addEventListener('blur', () => {
+          if (this.searchHint && !this.searchInput.value) {
+            this.searchHint.style.display = '';
+          }
+        });
+
+        // Global keyboard shortcut: "/" to focus search
+        document.addEventListener('keydown', (e) => this.handleGlobalKeydown(e));
+      },
+
+      // Handle global keydown for "/" shortcut
+      handleGlobalKeydown(e) {
+        // Don't trigger if user is typing in an input or textarea
+        const activeElement = document.activeElement;
+        const isTyping = activeElement && (
+          activeElement.tagName === 'INPUT' ||
+          activeElement.tagName === 'TEXTAREA' ||
+          activeElement.isContentEditable
+        );
+
+        if (isTyping) return;
+
+        // "/" key focuses the search input
+        if (e.key === '/') {
+          e.preventDefault();
+          this.focus();
+        }
+      },
+
+      // Focus the search input
+      focus() {
+        if (this.searchInput) {
+          this.searchInput.focus();
+        }
       },
 
       // Handle search input
