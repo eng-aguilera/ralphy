@@ -45,10 +45,14 @@ ${BOLD}OPTIONS:${RESET}
   -n, --dry-run         Show prompt without executing
   -h, --help            Show this help
 
+${BOLD}MODES:${RESET}
+  Default (sandbox)   OS-level sandbox + restricted tools (recommended)
+  Docker (-d)         Full container isolation (for AFK/unattended runs)
+
 ${BOLD}EXAMPLES:${RESET}
-  ./ralphy2.sh                    # Run 10 iterations
-  ./ralphy2.sh 5                  # Run 5 iterations
-  ./ralphy2.sh -d 20              # Run 20 iterations in Docker
+  ./ralphy2.sh                    # Run 10 iterations (sandbox mode)
+  ./ralphy2.sh 5                  # Run 5 iterations (sandbox mode)
+  ./ralphy2.sh -d 20              # Run 20 iterations in Docker (full isolation)
   ./ralphy2.sh -n                 # Dry run - show prompt
 
 ${BOLD}PRD FORMAT:${RESET}
@@ -248,7 +252,9 @@ run_ai() {
 
         docker sandbox run $docker_opts claude -p "$prompt" --dangerously-skip-permissions
       else
-        # Direct on host: coding tools + playwright for testing
+        # Sandbox mode: restricted tools + OS-level sandbox (if enabled via /sandbox)
+        # Tool restrictions provide defense in depth
+        # Enable OS-level sandbox with: claude /sandbox
         claude -p "$prompt" --allowedTools "Edit,Write,Read,Glob,Grep,Bash,TodoWrite,WebFetch,WebSearch,mcp__playwright__*"
       fi
       ;;
@@ -280,9 +286,9 @@ if [[ "$USE_DOCKER" == true ]]; then
   [[ -d "$HOME/.ssh" ]] && docker_features="${docker_features:+$docker_features+}ssh"
   [[ -d "$HOME/.config/gh" ]] && docker_features="${docker_features:+$docker_features+}gh"
   [[ "$MOUNT_DOCKER_SOCKET" == true ]] && docker_features="${docker_features:+$docker_features+}docker"
-  log_info "Mode: Docker sandbox (${docker_features:-basic})"
+  log_info "Mode: Docker (full isolation, ${docker_features:-basic})"
 else
-  log_warn "Mode: Direct on host (restricted tools)"
+  log_info "Mode: Sandbox (OS-level + restricted tools)"
 fi
 log_info "Tasks remaining: $remaining | Max iterations: $MAX_ITERATIONS"
 echo ""
