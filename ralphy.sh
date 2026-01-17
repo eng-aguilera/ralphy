@@ -12,7 +12,7 @@ set -euo pipefail
 # CONFIGURATION & DEFAULTS
 # ============================================
 
-VERSION="3.1.0"
+VERSION="4.0.0"
 
 # Runtime options
 SKIP_TESTS=false
@@ -35,8 +35,8 @@ PARALLEL=false
 MAX_PARALLEL=3
 
 # PRD source options
-PRD_SOURCE="markdown"  # markdown, yaml, github
-PRD_FILE="PRD.md"
+PRD_SOURCE="json"  # json, yaml, github
+PRD_FILE="PRD.json"
 GITHUB_REPO=""
 GITHUB_LABEL=""
 
@@ -71,6 +71,7 @@ declare -a parallel_pids=()
 declare -a task_branches=()
 WORKTREE_BASE=""  # Base directory for parallel agent worktrees
 ORIGINAL_DIR=""   # Original working directory (for worktree operations)
+CURRENT_TASK_INDEX=-1  # Track current task index for JSON
 
 # ============================================
 # UTILITY FUNCTIONS
@@ -142,8 +143,8 @@ ${BOLD}GIT BRANCH OPTIONS:${RESET}
   --draft-pr          Create PRs as drafts
 
 ${BOLD}PRD SOURCE OPTIONS:${RESET}
-  --prd FILE          PRD file path (default: PRD.md)
-  --yaml FILE         Use YAML task file instead of markdown
+  --prd FILE          PRD file path (default: PRD.json)
+  --yaml FILE         Use YAML task file instead of JSON
   --github REPO       Fetch tasks from GitHub issues (e.g., owner/repo)
   --github-label TAG  Filter GitHub issues by label
 
@@ -162,18 +163,31 @@ ${BOLD}EXAMPLES:${RESET}
   ./ralphy.sh --yaml tasks.yaml            # Use YAML task file
   ./ralphy.sh --github owner/repo          # Fetch from GitHub issues
 
-${BOLD}PRD FORMATS:${RESET}
-  Markdown (PRD.md):
-    - [ ] Task description
+${BOLD}PRD FORMAT (JSON):${RESET}
+  {
+    "context": {
+      "name": "Project Name",
+      "description": "What we're building",
+      "techStack": ["Tech 1", "Tech 2"]
+    },
+    "tasks": [
+      {
+        "category": "feature",
+        "description": "Task description",
+        "steps": ["Verify step 1", "Verify step 2"],
+        "passes": false
+      }
+    ]
+  }
 
-  YAML (tasks.yaml):
-    tasks:
-      - title: Task description
-        completed: false
-        parallel_group: 1  # Optional: tasks with same group run in parallel
+${BOLD}YAML FORMAT:${RESET}
+  tasks:
+    - title: Task description
+      completed: false
+      parallel_group: 1  # Optional: tasks with same group run in parallel
 
-  GitHub Issues:
-    Uses open issues from the specified repository
+${BOLD}GitHub Issues:${RESET}
+  Uses open issues from the specified repository
 
 EOF
 }
@@ -259,8 +273,8 @@ parse_args() {
         shift
         ;;
       --prd)
-        PRD_FILE="${2:-PRD.md}"
-        PRD_SOURCE="markdown"
+        PRD_FILE="${2:-PRD.json}"
+        PRD_SOURCE="json"
         shift 2
         ;;
       --yaml)
@@ -307,9 +321,18 @@ check_requirements() {
 
   # Check for PRD source
   case "$PRD_SOURCE" in
-    markdown)
+    json)
       if [[ ! -f "$PRD_FILE" ]]; then
         log_error "$PRD_FILE not found in current directory"
+        exit 1
+      fi
+      if ! command -v jq &>/dev/null; then
+        log_error "jq is required for JSON parsing. Install from https://stedolan.github.io/jq/"
+        exit 1
+      fi
+      # Validate JSON structure
+      if ! jq -e '.tasks' "$PRD_FILE" >/dev/null 2>&1; then
+        log_error "$PRD_FILE is not valid JSON or missing 'tasks' array"
         exit 1
       fi
       ;;
@@ -363,7 +386,7 @@ check_requirements() {
       ;;
   esac
 
-  # Check for jq
+  # Check for jq (required for all modes for token parsing)
   if ! command -v jq &>/dev/null; then
     missing+=("jq")
   fi
@@ -398,23 +421,23 @@ check_requirements() {
 
 cleanup() {
   local exit_code=$?
-  
+
   # Kill background processes
   [[ -n "$monitor_pid" ]] && kill "$monitor_pid" 2>/dev/null || true
   [[ -n "$ai_pid" ]] && kill "$ai_pid" 2>/dev/null || true
-  
+
   # Kill parallel processes
   for pid in "${parallel_pids[@]+"${parallel_pids[@]}"}"; do
     kill "$pid" 2>/dev/null || true
   done
-  
+
   # Kill any remaining child processes
   pkill -P $$ 2>/dev/null || true
-  
+
   # Remove temp file
   [[ -n "$tmpfile" ]] && rm -f "$tmpfile"
   [[ -n "$CODEX_LAST_MESSAGE_FILE" ]] && rm -f "$CODEX_LAST_MESSAGE_FILE"
-  
+
   # Cleanup parallel worktrees
   if [[ -n "$WORKTREE_BASE" ]] && [[ -d "$WORKTREE_BASE" ]]; then
     # Remove all worktrees we created
@@ -433,12 +456,12 @@ cleanup() {
       log_warn "Preserving worktree base with dirty agents: $WORKTREE_BASE"
     fi
   fi
-  
+
   # Show message on interrupt
   if [[ $exit_code -eq 130 ]]; then
     printf "\n"
     log_warn "Interrupted! Cleaned up."
-    
+
     # Show branches created if any
     if [[ -n "${task_branches[*]+"${task_branches[*]}"}" ]]; then
       log_info "Branches created: ${task_branches[*]}"
@@ -447,34 +470,55 @@ cleanup() {
 }
 
 # ============================================
-# TASK SOURCES - MARKDOWN
+# TASK SOURCES - JSON
 # ============================================
 
-get_tasks_markdown() {
-  grep '^\- \[ \]' "$PRD_FILE" 2>/dev/null | sed 's/^- \[ \] //' || true
+get_tasks_json() {
+  jq -r '.tasks[] | select(.passes == false) | .description' "$PRD_FILE" 2>/dev/null || true
 }
 
-get_next_task_markdown() {
-  grep -m1 '^\- \[ \]' "$PRD_FILE" 2>/dev/null | sed 's/^- \[ \] //' | cut -c1-50 || echo ""
+get_next_task_json() {
+  jq -r '[.tasks[] | select(.passes == false)][0] | .description // empty' "$PRD_FILE" 2>/dev/null || echo ""
 }
 
-count_remaining_markdown() {
-  grep -c '^\- \[ \]' "$PRD_FILE" 2>/dev/null || echo "0"
+get_next_task_full_json() {
+  # Returns the full task object as JSON for the prompt
+  jq -c '[.tasks[] | select(.passes == false)][0] // empty' "$PRD_FILE" 2>/dev/null || echo ""
 }
 
-count_completed_markdown() {
-  grep -c '^\- \[x\]' "$PRD_FILE" 2>/dev/null || echo "0"
+get_task_index_json() {
+  local task_desc="$1"
+  jq -r --arg desc "$task_desc" 'to_entries | .[] | select(.value.description == $desc) | .key' "$PRD_FILE" 2>/dev/null | head -1 || echo "-1"
 }
 
-mark_task_complete_markdown() {
-  local task=$1
-  # For macOS sed (BRE), we need to:
-  # - Escape: [ ] \ . * ^ $ /
-  # - NOT escape: { } ( ) + ? | (these are literal in BRE)
-  local escaped_task
-  escaped_task=$(printf '%s\n' "$task" | sed 's/[[\.*^$/]/\\&/g')
-  sed -i.bak "s/^- \[ \] ${escaped_task}/- [x] ${escaped_task}/" "$PRD_FILE"
-  rm -f "${PRD_FILE}.bak"
+count_remaining_json() {
+  jq '[.tasks[] | select(.passes == false)] | length' "$PRD_FILE" 2>/dev/null || echo "0"
+}
+
+count_completed_json() {
+  jq '[.tasks[] | select(.passes == true)] | length' "$PRD_FILE" 2>/dev/null || echo "0"
+}
+
+mark_task_complete_json() {
+  local task_desc="$1"
+  local tmpjson
+  tmpjson=$(mktemp)
+
+  # Update the task with matching description to passes: true
+  jq --arg desc "$task_desc" '
+    (.tasks[] | select(.description == $desc)).passes = true
+  ' "$PRD_FILE" > "$tmpjson" && mv "$tmpjson" "$PRD_FILE"
+}
+
+get_context_json() {
+  # Returns the context section as formatted text
+  jq -r '
+    .context |
+    "Project: \(.name // "Unnamed")\n" +
+    "Description: \(.description // "No description")\n" +
+    (if .techStack then "Tech Stack: \(.techStack | join(", "))\n" else "" end) +
+    (if .notes then "Notes: \(.notes)\n" else "" end)
+  ' "$PRD_FILE" 2>/dev/null || echo ""
 }
 
 # ============================================
@@ -567,7 +611,7 @@ get_github_issue_body() {
 
 get_next_task() {
   case "$PRD_SOURCE" in
-    markdown) get_next_task_markdown ;;
+    json) get_next_task_json ;;
     yaml) get_next_task_yaml ;;
     github) get_next_task_github ;;
   esac
@@ -575,7 +619,7 @@ get_next_task() {
 
 get_all_tasks() {
   case "$PRD_SOURCE" in
-    markdown) get_tasks_markdown ;;
+    json) get_tasks_json ;;
     yaml) get_tasks_yaml ;;
     github) get_tasks_github ;;
   esac
@@ -583,7 +627,7 @@ get_all_tasks() {
 
 count_remaining_tasks() {
   case "$PRD_SOURCE" in
-    markdown) count_remaining_markdown ;;
+    json) count_remaining_json ;;
     yaml) count_remaining_yaml ;;
     github) count_remaining_github ;;
   esac
@@ -591,7 +635,7 @@ count_remaining_tasks() {
 
 count_completed_tasks() {
   case "$PRD_SOURCE" in
-    markdown) count_completed_markdown ;;
+    json) count_completed_json ;;
     yaml) count_completed_yaml ;;
     github) count_completed_github ;;
   esac
@@ -600,7 +644,7 @@ count_completed_tasks() {
 mark_task_complete() {
   local task=$1
   case "$PRD_SOURCE" in
-    markdown) mark_task_complete_markdown "$task" ;;
+    json) mark_task_complete_json "$task" ;;
     yaml) mark_task_complete_yaml "$task" ;;
     github) mark_task_complete_github "$task" ;;
   esac
@@ -613,9 +657,9 @@ mark_task_complete() {
 create_task_branch() {
   local task=$1
   local branch_name="ralphy/$(slugify "$task")"
-  
+
   log_debug "Creating branch: $branch_name from $BASE_BRANCH"
-  
+
   # Stash any changes (only pop if a new stash was created)
   local stash_before stash_after stashed=false
   stash_before=$(git stash list -1 --format='%gd %s' 2>/dev/null || true)
@@ -624,7 +668,7 @@ create_task_branch() {
   if [[ -n "$stash_after" ]] && [[ "$stash_after" != "$stash_before" ]] && [[ "$stash_after" == *"ralphy-autostash"* ]]; then
     stashed=true
   fi
-  
+
   # Create and checkout new branch
   git checkout "$BASE_BRANCH" 2>/dev/null || true
   git pull origin "$BASE_BRANCH" 2>/dev/null || true
@@ -632,12 +676,12 @@ create_task_branch() {
     # Branch might already exist
     git checkout "$branch_name" 2>/dev/null || true
   }
-  
+
   # Pop stash if we stashed
   if [[ "$stashed" == true ]]; then
     git stash pop >/dev/null 2>&1 || true
   fi
-  
+
   task_branches+=("$branch_name")
   echo "$branch_name"
 }
@@ -646,18 +690,18 @@ create_pull_request() {
   local branch=$1
   local task=$2
   local body="${3:-Automated PR created by Ralphy}"
-  
+
   local draft_flag=""
   [[ "$PR_DRAFT" == true ]] && draft_flag="--draft"
-  
+
   log_info "Creating pull request for $branch..."
-  
+
   # Push branch first
   git push -u origin "$branch" 2>/dev/null || {
     log_warn "Failed to push branch $branch"
     return 1
   }
-  
+
   # Create PR
   local pr_url
   pr_url=$(gh pr create \
@@ -669,7 +713,7 @@ create_pull_request() {
     log_warn "Failed to create PR for $branch"
     return 1
   }
-  
+
   log_success "PR created: $pr_url"
   echo "$pr_url"
 }
@@ -710,7 +754,7 @@ monitor_progress() {
         current_step="Staging"
       elif echo "$content" | grep -qE 'progress\.txt'; then
         current_step="Logging"
-      elif echo "$content" | grep -qE 'PRD\.md|tasks\.yaml'; then
+      elif echo "$content" | grep -qE 'PRD\.json|PRD\.md|tasks\.yaml'; then
         current_step="Updating PRD"
       elif echo "$content" | grep -qE 'lint|eslint|biome|prettier'; then
         current_step="Linting"
@@ -727,7 +771,7 @@ monitor_progress() {
 
     local spinner_char="${spinstr:$spin_idx:1}"
     local step_color=""
-    
+
     # Color-code steps
     case "$current_step" in
       "Thinking"|"Reading code") step_color="$CYAN" ;;
@@ -753,27 +797,27 @@ monitor_progress() {
 
 notify_done() {
   local message="${1:-Ralphy has completed all tasks!}"
-  
+
   # macOS
   if command -v afplay &>/dev/null; then
     afplay /System/Library/Sounds/Glass.aiff 2>/dev/null &
   fi
-  
+
   # macOS notification
   if command -v osascript &>/dev/null; then
     osascript -e "display notification \"$message\" with title \"Ralphy\"" 2>/dev/null || true
   fi
-  
+
   # Linux (notify-send)
   if command -v notify-send &>/dev/null; then
     notify-send "Ralphy" "$message" 2>/dev/null || true
   fi
-  
+
   # Linux (paplay for sound)
   if command -v paplay &>/dev/null; then
     paplay /usr/share/sounds/freedesktop/stereo/complete.oga 2>/dev/null &
   fi
-  
+
   # Windows (powershell)
   if command -v powershell.exe &>/dev/null; then
     powershell.exe -Command "[System.Media.SystemSounds]::Asterisk.Play()" 2>/dev/null || true
@@ -782,12 +826,12 @@ notify_done() {
 
 notify_error() {
   local message="${1:-Ralphy encountered an error}"
-  
+
   # macOS
   if command -v osascript &>/dev/null; then
     osascript -e "display notification \"$message\" with title \"Ralphy - Error\"" 2>/dev/null || true
   fi
-  
+
   # Linux
   if command -v notify-send &>/dev/null; then
     notify-send -u critical "Ralphy - Error" "$message" 2>/dev/null || true
@@ -801,11 +845,33 @@ notify_error() {
 build_prompt() {
   local task_override="${1:-}"
   local prompt=""
-  
+
   # Add context based on PRD source
   case "$PRD_SOURCE" in
-    markdown)
-      prompt="@${PRD_FILE} @progress.txt"
+    json)
+      # Get context and current task info
+      local context
+      context=$(get_context_json)
+      local task_json
+      task_json=$(get_next_task_full_json)
+      local task_desc
+      task_desc=$(echo "$task_json" | jq -r '.description // empty' 2>/dev/null || echo "")
+      local task_category
+      task_category=$(echo "$task_json" | jq -r '.category // "feature"' 2>/dev/null || echo "feature")
+      local task_steps
+      task_steps=$(echo "$task_json" | jq -r '.steps // [] | .[]' 2>/dev/null || echo "")
+
+      prompt="PROJECT CONTEXT:
+$context
+
+CURRENT TASK:
+Category: $task_category
+Description: $task_desc
+
+VERIFICATION STEPS:
+$task_steps
+
+@progress.txt"
       ;;
     yaml)
       prompt="@${PRD_FILE} @progress.txt"
@@ -824,12 +890,14 @@ $issue_body
 @progress.txt"
       ;;
   esac
-  
+
   prompt="$prompt
-1. Find the highest-priority incomplete task and implement it."
+
+INSTRUCTIONS:
+1. Implement the task described above."
 
   local step=2
-  
+
   if [[ "$SKIP_TESTS" == false ]]; then
     prompt="$prompt
 $step. Write tests for the feature.
@@ -843,11 +911,11 @@ $step. Run linting and ensure it passes before proceeding."
     step=$((step+1))
   fi
 
-  # Adjust completion step based on PRD source
+  # For JSON, the script marks tasks complete, not the AI
   case "$PRD_SOURCE" in
-    markdown)
+    json)
       prompt="$prompt
-$step. Update the PRD to mark the task as complete (change '- [ ]' to '- [x]')."
+$step. Verify the task is complete by checking the verification steps above."
       ;;
     yaml)
       prompt="$prompt
@@ -858,13 +926,14 @@ $step. Update ${PRD_FILE} to mark the task as completed (set completed: true)."
 $step. The task will be marked complete automatically. Just note the completion in progress.txt."
       ;;
   esac
-  
+
   step=$((step+1))
-  
+
   prompt="$prompt
-$step. Append your progress to progress.txt.
+$step. Append your progress to progress.txt with a summary of what you implemented.
 $((step+1)). Commit your changes with a descriptive message.
-ONLY WORK ON A SINGLE TASK."
+
+IMPORTANT: Focus ONLY on this single task. Do not modify PRD.json."
 
   if [[ "$SKIP_TESTS" == false ]]; then
     prompt="$prompt Do not proceed if tests fail."
@@ -872,9 +941,6 @@ ONLY WORK ON A SINGLE TASK."
   if [[ "$SKIP_LINT" == false ]]; then
     prompt="$prompt Do not proceed if linting fails."
   fi
-
-  prompt="$prompt
-If ALL tasks in the PRD are complete, output <promise>COMPLETE</promise>."
 
   echo "$prompt"
 }
@@ -886,7 +952,7 @@ If ALL tasks in the PRD are complete, output <promise>COMPLETE</promise>."
 run_ai_command() {
   local prompt=$1
   local output_file=$2
-  
+
   case "$AI_ENGINE" in
     opencode)
       # OpenCode: use 'run' command with JSON format and permissive settings
@@ -916,7 +982,7 @@ run_ai_command() {
         -p "$prompt" > "$output_file" 2>&1 &
       ;;
   esac
-  
+
   ai_pid=$!
 }
 
@@ -926,23 +992,23 @@ parse_ai_result() {
   local input_tokens=0
   local output_tokens=0
   local actual_cost="0"
-  
+
   case "$AI_ENGINE" in
     opencode)
       # OpenCode JSON format: uses step_finish for tokens and text events for response
       local step_finish
       step_finish=$(echo "$result" | grep '"type":"step_finish"' | tail -1 || echo "")
-      
+
       if [[ -n "$step_finish" ]]; then
         input_tokens=$(echo "$step_finish" | jq -r '.part.tokens.input // 0' 2>/dev/null || echo "0")
         output_tokens=$(echo "$step_finish" | jq -r '.part.tokens.output // 0' 2>/dev/null || echo "0")
         # OpenCode provides actual cost directly
         actual_cost=$(echo "$step_finish" | jq -r '.part.cost // 0' 2>/dev/null || echo "0")
       fi
-      
+
       # Get text response from text events
       response=$(echo "$result" | grep '"type":"text"' | jq -rs 'map(.part.text // "") | join("")' 2>/dev/null || echo "")
-      
+
       # If no text found, indicate task completed
       if [[ -z "$response" ]]; then
         response="Task completed"
@@ -951,10 +1017,10 @@ parse_ai_result() {
     cursor)
       # Cursor agent: parse stream-json output
       # Cursor doesn't provide token counts, but does provide duration_ms
-      
+
       local result_line
       result_line=$(echo "$result" | grep '"type":"result"' | tail -1)
-      
+
       if [[ -n "$result_line" ]]; then
         response=$(echo "$result_line" | jq -r '.result // "Task completed"' 2>/dev/null || echo "Task completed")
         # Cursor provides duration instead of tokens
@@ -967,7 +1033,7 @@ parse_ai_result() {
           actual_cost="duration:$duration_ms"
         fi
       fi
-      
+
       # Get response from assistant message if result is empty
       if [[ -z "$response" ]] || [[ "$response" == "Task completed" ]]; then
         local assistant_msg
@@ -976,7 +1042,7 @@ parse_ai_result() {
           response=$(echo "$assistant_msg" | jq -r '.message.content[0].text // .message.content // "Task completed"' 2>/dev/null || echo "Task completed")
         fi
       fi
-      
+
       # Tokens remain 0 for Cursor (not available)
       input_tokens=0
       output_tokens=0
@@ -994,7 +1060,7 @@ parse_ai_result() {
       # Claude Code stream-json parsing
       local result_line
       result_line=$(echo "$result" | grep '"type":"result"' | tail -1)
-      
+
       if [[ -n "$result_line" ]]; then
         response=$(echo "$result_line" | jq -r '.result // "No result text"' 2>/dev/null || echo "Could not parse result")
         input_tokens=$(echo "$result_line" | jq -r '.usage.input_tokens // 0' 2>/dev/null || echo "0")
@@ -1002,11 +1068,11 @@ parse_ai_result() {
       fi
       ;;
   esac
-  
+
   # Sanitize token counts
   [[ "$input_tokens" =~ ^[0-9]+$ ]] || input_tokens=0
   [[ "$output_tokens" =~ ^[0-9]+$ ]] || output_tokens=0
-  
+
   echo "$response"
   echo "---TOKENS---"
   echo "$input_tokens"
@@ -1016,14 +1082,14 @@ parse_ai_result() {
 
 check_for_errors() {
   local result=$1
-  
+
   if echo "$result" | grep -q '"type":"error"'; then
     local error_msg
     error_msg=$(echo "$result" | grep '"type":"error"' | head -1 | jq -r '.error.message // .message // .' 2>/dev/null || echo "Unknown error")
     echo "$error_msg"
     return 1
   fi
-  
+
   return 0
 }
 
@@ -1034,7 +1100,7 @@ check_for_errors() {
 calculate_cost() {
   local input=$1
   local output=$2
-  
+
   if command -v bc &>/dev/null; then
     echo "scale=4; ($input * 0.000003) + ($output * 0.000015)" | bc
   else
@@ -1049,12 +1115,12 @@ calculate_cost() {
 run_single_task() {
   local task_name="${1:-}"
   local task_num="${2:-$iteration}"
-  
+
   retry_count=0
-  
+
   echo ""
   echo "${BOLD}>>> Task $task_num${RESET}"
-  
+
   local remaining completed
   remaining=$(count_remaining_tasks | tr -d '[:space:]')
   completed=$(count_completed_tasks | tr -d '[:space:]')
@@ -1070,12 +1136,21 @@ run_single_task() {
   else
     current_task=$(get_next_task)
   fi
-  
+
   if [[ -z "$current_task" ]]; then
     log_info "No more tasks found"
     return 2
   fi
-  
+
+  # Show task category for JSON source
+  if [[ "$PRD_SOURCE" == "json" ]]; then
+    local task_json
+    task_json=$(get_next_task_full_json)
+    local task_category
+    task_category=$(echo "$task_json" | jq -r '.category // "feature"' 2>/dev/null || echo "feature")
+    echo "${DIM}    Category: ${task_category}${RESET}"
+  fi
+
   current_step="Thinking"
 
   # Create branch if needed
@@ -1172,7 +1247,7 @@ run_single_task() {
     actual_cost=$(echo "$token_data" | sed -n '3p')
 
     printf "  ${GREEN}✓${RESET} %-16s │ %s\n" "Done" "${current_task:0:40}"
-    
+
     if [[ -n "$response" ]]; then
       echo ""
       echo "$response"
@@ -1185,7 +1260,7 @@ run_single_task() {
     # Update totals
     total_input_tokens=$((total_input_tokens + input_tokens))
     total_output_tokens=$((total_output_tokens + output_tokens))
-    
+
     # Track actual cost for OpenCode, or duration for Cursor
     if [[ -n "$actual_cost" ]]; then
       if [[ "$actual_cost" == duration:* ]]; then
@@ -1205,10 +1280,8 @@ run_single_task() {
       CODEX_LAST_MESSAGE_FILE=""
     fi
 
-    # Mark task complete for GitHub issues (since AI can't do it)
-    if [[ "$PRD_SOURCE" == "github" ]]; then
-      mark_task_complete "$current_task"
-    fi
+    # Mark task complete (script handles this for JSON and GitHub)
+    mark_task_complete "$current_task"
 
     # Create PR if requested
     if [[ "$CREATE_PR" == true ]] && [[ -n "$branch_name" ]]; then
@@ -1223,14 +1296,9 @@ run_single_task() {
     remaining_count=$(count_remaining_tasks | tr -d '[:space:]' | head -1)
     remaining_count=${remaining_count:-0}
     [[ "$remaining_count" =~ ^[0-9]+$ ]] || remaining_count=0
-    
+
     if [[ "$remaining_count" -eq 0 ]]; then
       return 2  # All tasks actually complete
-    fi
-    
-    # AI might claim completion but tasks remain - continue anyway
-    if [[ "$result" == *"<promise>COMPLETE</promise>"* ]]; then
-      log_debug "AI claimed completion but $remaining_count tasks remain, continuing..."
     fi
 
     return 0
@@ -1250,28 +1318,28 @@ create_agent_worktree() {
   local agent_num="$2"
   local branch_name="ralphy/agent-${agent_num}-$(slugify "$task_name")"
   local worktree_dir="${WORKTREE_BASE}/agent-${agent_num}"
-  
+
   # Run git commands from original directory
   # All git output goes to stderr so it doesn't interfere with our return value
   (
     cd "$ORIGINAL_DIR" || { echo "Failed to cd to $ORIGINAL_DIR" >&2; exit 1; }
-    
+
     # Prune any stale worktrees first
     git worktree prune >&2
-    
+
     # Delete branch if it exists (force)
     git branch -D "$branch_name" >&2 2>/dev/null || true
-    
+
     # Create branch from base
     git branch "$branch_name" "$BASE_BRANCH" >&2 || { echo "Failed to create branch $branch_name from $BASE_BRANCH" >&2; exit 1; }
-    
+
     # Remove existing worktree dir if any
     rm -rf "$worktree_dir" 2>/dev/null || true
-    
+
     # Create worktree
     git worktree add "$worktree_dir" "$branch_name" >&2 || { echo "Failed to create worktree at $worktree_dir" >&2; exit 1; }
   )
-  
+
   # Only output the result - git commands above send their output to stderr
   echo "$worktree_dir|$branch_name"
 }
@@ -1295,7 +1363,7 @@ cleanup_agent_worktree() {
     fi
     return 0
   fi
-  
+
   # Run from original directory
   (
     cd "$ORIGINAL_DIR" || exit 1
@@ -1311,41 +1379,41 @@ run_parallel_agent() {
   local output_file="$3"
   local status_file="$4"
   local log_file="$5"
-  
+
   echo "setting up" > "$status_file"
-  
+
   # Log setup info
   echo "Agent $agent_num starting for task: $task_name" >> "$log_file"
   echo "ORIGINAL_DIR=$ORIGINAL_DIR" >> "$log_file"
   echo "WORKTREE_BASE=$WORKTREE_BASE" >> "$log_file"
   echo "BASE_BRANCH=$BASE_BRANCH" >> "$log_file"
-  
+
   # Create isolated worktree for this agent
   local worktree_info
   worktree_info=$(create_agent_worktree "$task_name" "$agent_num" 2>>"$log_file")
   local worktree_dir="${worktree_info%%|*}"
   local branch_name="${worktree_info##*|}"
-  
+
   echo "Worktree dir: $worktree_dir" >> "$log_file"
   echo "Branch name: $branch_name" >> "$log_file"
-  
+
   if [[ ! -d "$worktree_dir" ]]; then
     echo "failed" > "$status_file"
     echo "ERROR: Worktree directory does not exist: $worktree_dir" >> "$log_file"
     echo "0 0" > "$output_file"
     return 1
   fi
-  
+
   echo "running" > "$status_file"
-  
+
   # Copy PRD file to worktree from original directory
-  if [[ "$PRD_SOURCE" == "markdown" ]] || [[ "$PRD_SOURCE" == "yaml" ]]; then
+  if [[ "$PRD_SOURCE" == "json" ]] || [[ "$PRD_SOURCE" == "yaml" ]]; then
     cp "$ORIGINAL_DIR/$PRD_FILE" "$worktree_dir/" 2>/dev/null || true
   fi
-  
+
   # Ensure progress.txt exists in worktree
   touch "$worktree_dir/progress.txt"
-  
+
   # Build prompt for this specific task
   local prompt="You are working on a specific task. Focus ONLY on this task:
 
@@ -1357,18 +1425,18 @@ Instructions:
 3. Update progress.txt with what you did
 4. Commit your changes with a descriptive message
 
-Do NOT modify PRD.md or mark tasks complete - that will be handled separately.
+Do NOT modify PRD.json or mark tasks complete - that will be handled separately.
 Focus only on implementing: $task_name"
 
   # Temp file for AI output
   local tmpfile
   tmpfile=$(mktemp)
-  
+
   # Run AI agent in the worktree directory
   local result=""
   local success=false
   local retry=0
-  
+
   while [[ $retry -lt $MAX_RETRIES ]]; do
     case "$AI_ENGINE" in
       opencode)
@@ -1408,9 +1476,9 @@ Focus only on implementing: $task_name"
         ) > "$tmpfile" 2>>"$log_file"
         ;;
     esac
-    
+
     result=$(cat "$tmpfile" 2>/dev/null || echo "")
-    
+
     if [[ -n "$result" ]]; then
       local error_msg
       if ! error_msg=$(check_for_errors "$result"); then
@@ -1422,14 +1490,14 @@ Focus only on implementing: $task_name"
       success=true
       break
     fi
-    
+
     ((retry++))
     echo "Retry $retry/$MAX_RETRIES after empty response" >> "$log_file"
     sleep "$RETRY_DELAY"
   done
-  
+
   rm -f "$tmpfile"
-  
+
   if [[ "$success" == true ]]; then
     # Parse tokens
     local parsed input_tokens output_tokens
@@ -1454,7 +1522,7 @@ Focus only on implementing: $task_name"
       cleanup_agent_worktree "$worktree_dir" "$branch_name" "$log_file"
       return 1
     fi
-    
+
     # Create PR if requested
     if [[ "$CREATE_PR" == true ]]; then
       (
@@ -1468,14 +1536,14 @@ Focus only on implementing: $task_name"
           ${PR_DRAFT:+--draft} 2>>"$log_file" || true
       )
     fi
-    
+
     # Write success output
     echo "done" > "$status_file"
     echo "$input_tokens $output_tokens $branch_name" > "$output_file"
-    
+
     # Cleanup worktree (but keep branch)
     cleanup_agent_worktree "$worktree_dir" "$branch_name" "$log_file"
-    
+
     return 0
   else
     echo "failed" > "$status_file"
@@ -1487,41 +1555,41 @@ Focus only on implementing: $task_name"
 
 run_parallel_tasks() {
   log_info "Running ${BOLD}$MAX_PARALLEL parallel agents${RESET} (each in isolated worktree)..."
-  
+
   local all_tasks=()
-  
+
   # Get all pending tasks
   while IFS= read -r task; do
     [[ -n "$task" ]] && all_tasks+=("$task")
   done < <(get_all_tasks)
-  
+
   if [[ ${#all_tasks[@]} -eq 0 ]]; then
     log_info "No tasks to run"
     return 2
   fi
-  
+
   local total_tasks=${#all_tasks[@]}
   log_info "Found $total_tasks tasks to process"
-  
+
   # Store original directory for git operations from subshells
   ORIGINAL_DIR=$(pwd)
   export ORIGINAL_DIR
-  
+
   # Set up worktree base directory
   WORKTREE_BASE=$(mktemp -d)
   export WORKTREE_BASE
   log_debug "Worktree base: $WORKTREE_BASE"
-  
+
   # Ensure we have a base branch set
   if [[ -z "$BASE_BRANCH" ]]; then
     BASE_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
   fi
   export BASE_BRANCH
   log_info "Base branch: $BASE_BRANCH"
-  
+
   # Export variables needed by subshell agents
   export AI_ENGINE MAX_RETRIES RETRY_DELAY PRD_SOURCE PRD_FILE CREATE_PR PR_DRAFT
-  
+
   local batch_num=0
   local completed_branches=()
   local groups=("all")
@@ -1693,13 +1761,7 @@ run_parallel_tasks() {
             fi
 
             # Mark task complete in PRD
-            if [[ "$PRD_SOURCE" == "markdown" ]]; then
-              mark_task_complete_markdown "$task"
-            elif [[ "$PRD_SOURCE" == "yaml" ]]; then
-              mark_task_complete_yaml "$task"
-            elif [[ "$PRD_SOURCE" == "github" ]]; then
-              mark_task_complete_github "$task"
-            fi
+            mark_task_complete "$task"
             ;;
           failed)
             icon="✗"
@@ -1744,19 +1806,19 @@ run_parallel_tasks() {
       break
     fi
   done
-  
+
   # Cleanup worktree base
   if ! find "$WORKTREE_BASE" -maxdepth 1 -type d -name 'agent-*' -print -quit 2>/dev/null | grep -q .; then
     rm -rf "$WORKTREE_BASE" 2>/dev/null || true
   else
     log_warn "Preserving worktree base with dirty agents: $WORKTREE_BASE"
   fi
-  
+
   # Handle completed branches
   if [[ ${#completed_branches[@]} -gt 0 ]]; then
     echo ""
     echo "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-    
+
     if [[ "$CREATE_PR" == true ]]; then
       # PRs were created, just show the branches
       echo "${BOLD}Branches created by agents:${RESET}"
@@ -1776,12 +1838,12 @@ run_parallel_tasks() {
         done
         return 0
       fi
-      
+
       local merge_failed=()
-      
+
       for branch in "${completed_branches[@]}"; do
         printf "  Merging ${CYAN}%s${RESET}..." "$branch"
-        
+
         # Attempt to merge
         if git merge --no-edit "$branch" >/dev/null 2>&1; then
           printf " ${GREEN}✓${RESET}\n"
@@ -1793,22 +1855,22 @@ run_parallel_tasks() {
           # Don't abort yet - try AI resolution
         fi
       done
-      
+
       # Use AI to resolve merge conflicts
       if [[ ${#merge_failed[@]} -gt 0 ]]; then
         echo ""
         echo "${BOLD}Using AI to resolve ${#merge_failed[@]} merge conflict(s)...${RESET}"
         echo ""
-        
+
         local still_failed=()
-        
+
         for branch in "${merge_failed[@]}"; do
           printf "  Resolving ${CYAN}%s${RESET}..." "$branch"
-          
+
           # Get list of conflicted files
           local conflicted_files
           conflicted_files=$(git diff --name-only --diff-filter=U 2>/dev/null)
-          
+
           if [[ -z "$conflicted_files" ]]; then
             # No conflicts found (maybe already resolved or aborted)
             git merge --abort 2>/dev/null || true
@@ -1822,7 +1884,7 @@ run_parallel_tasks() {
             git branch -d "$branch" >/dev/null 2>&1 || true
             continue
           fi
-          
+
           # Build prompt for AI to resolve conflicts
           local resolve_prompt="You are resolving a git merge conflict. The following files have conflicts:
 
@@ -1844,7 +1906,7 @@ Be careful to preserve functionality from BOTH branches. The goal is to integrat
           # Run AI to resolve conflicts
           local resolve_tmpfile
           resolve_tmpfile=$(mktemp)
-          
+
           case "$AI_ENGINE" in
             opencode)
               OPENCODE_PERMISSION='{"*":"allow"}' opencode run \
@@ -1867,9 +1929,9 @@ Be careful to preserve functionality from BOTH branches. The goal is to integrat
                 --output-format stream-json > "$resolve_tmpfile" 2>&1
               ;;
           esac
-          
+
           rm -f "$resolve_tmpfile"
-          
+
           # Check if merge was completed
           if ! git diff --name-only --diff-filter=U 2>/dev/null | grep -q .; then
             # No more conflicts - merge succeeded
@@ -1882,7 +1944,7 @@ Be careful to preserve functionality from BOTH branches. The goal is to integrat
             git merge --abort 2>/dev/null || true
           fi
         done
-        
+
         if [[ ${#still_failed[@]} -gt 0 ]]; then
           echo ""
           echo "${YELLOW}Some conflicts could not be resolved automatically:${RESET}"
@@ -1901,7 +1963,7 @@ Be careful to preserve functionality from BOTH branches. The goal is to integrat
       fi
     fi
   fi
-  
+
   return 0
 }
 
@@ -1916,7 +1978,7 @@ show_summary() {
   echo "${BOLD}============================================${RESET}"
   echo ""
   echo "${BOLD}>>> Cost Summary${RESET}"
-  
+
   # Cursor doesn't provide token usage, but does provide duration
   if [[ "$AI_ENGINE" == "cursor" ]]; then
     echo "${DIM}Token usage not available (Cursor CLI doesn't expose this data)${RESET}"
@@ -1934,7 +1996,7 @@ show_summary() {
     echo "Input tokens:  $total_input_tokens"
     echo "Output tokens: $total_output_tokens"
     echo "Total tokens:  $((total_input_tokens + total_output_tokens))"
-    
+
     # Show actual cost if available (OpenCode provides this), otherwise estimate
     if [[ "$AI_ENGINE" == "opencode" ]] && command -v bc &>/dev/null; then
       local has_actual_cost
@@ -1952,7 +2014,7 @@ show_summary() {
       echo "Est. cost:     \$$cost"
     fi
   fi
-  
+
   # Show branches if created
   if [[ -n "${task_branches[*]+"${task_branches[*]}"}" ]]; then
     echo ""
@@ -1961,7 +2023,7 @@ show_summary() {
       echo "  - $branch"
     done
   fi
-  
+
   echo "${BOLD}============================================${RESET}"
 }
 
@@ -1975,14 +2037,14 @@ main() {
   if [[ "$DRY_RUN" == true ]] && [[ "$MAX_ITERATIONS" -eq 0 ]]; then
     MAX_ITERATIONS=1
   fi
-  
+
   # Set up cleanup trap
   trap cleanup EXIT
   trap 'exit 130' INT TERM HUP
-  
+
   # Check requirements
   check_requirements
-  
+
   # Show banner
   echo "${BOLD}============================================${RESET}"
   echo "${BOLD}Ralphy${RESET} - Running until PRD is complete"
@@ -1995,7 +2057,7 @@ main() {
   esac
   echo "Engine: $engine_display"
   echo "Source: ${CYAN}$PRD_SOURCE${RESET} (${PRD_FILE:-$GITHUB_REPO})"
-  
+
   local mode_parts=()
   [[ "$SKIP_TESTS" == true ]] && mode_parts+=("no-tests")
   [[ "$SKIP_LINT" == true ]] && mode_parts+=("no-lint")
@@ -2004,7 +2066,7 @@ main() {
   [[ "$BRANCH_PER_TASK" == true ]] && mode_parts+=("branch-per-task")
   [[ "$CREATE_PR" == true ]] && mode_parts+=("create-pr")
   [[ $MAX_ITERATIONS -gt 0 ]] && mode_parts+=("max:$MAX_ITERATIONS")
-  
+
   if [[ ${#mode_parts[@]} -gt 0 ]]; then
     echo "Mode: ${YELLOW}${mode_parts[*]}${RESET}"
   fi
@@ -2023,7 +2085,7 @@ main() {
     ((iteration++))
     local result_code=0
     run_single_task "" "$iteration" || result_code=$?
-    
+
     case $result_code in
       0)
         # Success, continue
@@ -2039,7 +2101,7 @@ main() {
         exit 0
         ;;
     esac
-    
+
     # Check max iterations
     if [[ $MAX_ITERATIONS -gt 0 ]] && [[ $iteration -ge $MAX_ITERATIONS ]]; then
       log_warn "Reached max iterations ($MAX_ITERATIONS)"
@@ -2047,7 +2109,7 @@ main() {
       notify_done "Ralphy stopped after $MAX_ITERATIONS iterations"
       exit 0
     fi
-    
+
     # Small delay between iterations
     sleep 1
   done
