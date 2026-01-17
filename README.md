@@ -4,6 +4,109 @@
 
 An autonomous AI coding loop that runs AI assistants (Claude Code, OpenCode, Codex, or Cursor) to work through tasks until everything is complete.
 
+---
+
+## Ralphy2 (Recommended)
+
+A simpler, Docker-first version based on the [Ralph Wiggum pattern](https://www.aihero.dev/tips-for-ai-coding-with-ralph-wiggum). If you're starting fresh, use this.
+
+### Quick Start
+
+```bash
+# Create PRD.json
+cat > PRD.json << 'EOF'
+{
+  "context": {
+    "name": "My Project",
+    "description": "What we're building",
+    "techStack": ["TypeScript", "React"]
+  },
+  "tasks": [
+    {
+      "category": "setup",
+      "description": "Initialize project with Vite",
+      "steps": ["Verify dev server starts"],
+      "passes": false
+    }
+  ]
+}
+EOF
+
+# Run in Docker sandbox (safe for AFK)
+./ralphy2.sh -d 10
+
+# Or direct mode (for HITL)
+./ralphy2.sh 5
+```
+
+### Ralphy2 Options
+
+```
+./ralphy2.sh [OPTIONS] [iterations]
+
+OPTIONS:
+  -p, --prd FILE        PRD file (default: PRD.json)
+  -d, --docker          Run in Docker sandbox (safe for AFK)
+  --name NAME           Container name (for parallel runs)
+  --mount-docker        Mount Docker socket (for agent-browser)
+  --no-mount-config     Don't mount ~/.claude
+  -e, --engine ENGINE   AI engine: claude, opencode
+  -n, --dry-run         Show prompt without executing
+  -h, --help            Show help
+```
+
+### Docker Mode Features
+
+When using `-d`, Ralphy2 automatically mounts:
+
+| Mount | Purpose |
+|-------|---------|
+| `~/.claude` | MCP servers, global CLAUDE.md |
+| `~/.gitconfig` | Git user.name/email |
+| `~/.ssh` | SSH keys for git push |
+| `~/.config/gh` | GitHub CLI auth |
+
+### Parallel Runs
+
+```bash
+# Terminal 1
+cd ~/project-a && ralphy2.sh -d --name project-a 10
+
+# Terminal 2
+cd ~/project-b && ralphy2.sh -d --name project-b 10
+
+# Monitor
+docker sandbox ls
+```
+
+### PRD.json Format
+
+```json
+{
+  "context": {
+    "name": "Project Name",
+    "description": "What we're building",
+    "techStack": ["Tech 1", "Tech 2"]
+  },
+  "tasks": [
+    {
+      "category": "feature",
+      "description": "What to implement",
+      "steps": ["How to verify"],
+      "passes": false
+    }
+  ]
+}
+```
+
+Categories: `setup`, `foundation`, `feature`, `ui`, `integration`, `enhancement`, `fix`, `polish`
+
+---
+
+## Ralphy (Original)
+
+The full-featured version with YAML support, GitHub Issues integration, parallel worktrees, and more.
+
 ## What It Does
 
 1. Reads tasks from a PRD file, YAML file, or GitHub Issues
